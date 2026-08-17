@@ -12,6 +12,8 @@ import BodyScanner from "@/components/BodyScanner";
 import RecipeAdvisor from "@/components/RecipeAdvisor";
 import ChatWidget from "@/components/ChatWidget";
 import AdminClientSwitcher, { RosterClient } from "@/components/AdminClientSwitcher";
+import TransformationStudio from "@/components/TransformationStudio";
+import CoachingVideoPlayer from "@/components/CoachingVideoPlayer";
 import {
   Cpu,
   Heart,
@@ -40,6 +42,8 @@ import {
   Edit3,
   Users,
   Footprints,
+  Layers,
+  Video,
 } from "lucide-react";
 
 // ── Tab definitions ──
@@ -49,6 +53,8 @@ const TABS = [
   { id: "nutrition", label: "Nutrition", icon: Apple },
   { id: "recovery", label: "Recovery", icon: Heart },
   { id: "workout", label: "Workout", icon: Dumbbell },
+  { id: "transformation", label: "Transformation", icon: Layers },
+  { id: "coaching", label: "Video Coaching", icon: Video },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -1428,6 +1434,23 @@ export default function ClientDashboard() {
                 })}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ═══ TRANSFORMATION TAB ═══ */}
+        {activeTab === "transformation" && (
+          <div className="animate-fadeIn">
+            <TransformationStudio
+              clientName={selectedAdminClient?.name || profile?.name || user?.email?.split("@")[0] || "Member"}
+              isAdmin={isAdminMode}
+            />
+          </div>
+        )}
+
+        {/* ═══ VIDEO COACHING TAB ═══ */}
+        {activeTab === "coaching" && (
+          <div className="animate-fadeIn">
+            <CoachingVideoPlayer />
           </div>
         )}
       </div>

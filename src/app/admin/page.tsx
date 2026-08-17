@@ -14,6 +14,7 @@ import {
   Dumbbell,
   Activity,
   Eye,
+  Layers,
 } from "lucide-react";
 
 interface Lead {
@@ -246,12 +247,18 @@ export default function AdminDashboardPage() {
       </section>
 
       {/* ── Quick Actions ── */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <QuickAction
           href="/dashboard?admin=true"
           icon={<Eye className="w-5 h-5 text-accent-lime" />}
-          label="Client Dashboard View"
+          label="Client Assist & Dashboard"
           desc="Impersonate & assist active members"
+        />
+        <QuickAction
+          href="/dashboard?admin=true"
+          icon={<Layers className="w-5 h-5 text-purple-400" />}
+          label="Transformation Studio"
+          desc="Inspect before/after photos & deltas"
         />
         <QuickAction
           href="/coastal-walk"
@@ -266,8 +273,14 @@ export default function AdminDashboardPage() {
           desc="Manage park location & schedule"
         />
         <QuickAction
+          href="/admin/leads"
+          icon={<Users className="w-5 h-5 text-accent-lime" />}
+          label="Lead Pipeline"
+          desc="Audit inbound strategy applications"
+        />
+        <QuickAction
           href="/brand-guide"
-          icon={<svg className="w-5 h-5 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 21V9" /></svg>}
+          icon={<svg className="w-5 h-5 text-silver-slate" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 21V9" /></svg>}
           label="Brand Guide"
           desc="View brand assets & style guide"
         />
