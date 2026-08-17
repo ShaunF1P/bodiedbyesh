@@ -1,0 +1,300 @@
+@import "tailwindcss";
+
+/* ═══ THEME INDIRECTION ═══
+   Tailwind v4's @theme inlines static values at build time.
+   To support runtime light/dark swap, we point @theme at CSS
+   custom properties defined in :root / html.light.
+   This way `bg-cyber-slate` compiles to `var(--color-cyber-slate)`
+   which references `var(--t-surface)` — swappable at runtime.
+*/
+
+/* ── Dark mode values (default) — Obsidian Gold & Rose Gold ── */
+:root {
+  --t-surface: #050508;
+  --t-glass: rgba(10, 10, 15, 0.85);
+  --t-card: #0E0E14;
+  --t-accent: #D4B87E;
+  --t-violet: #C58B8B;
+  --t-text: #FFFFFF;
+  --t-muted: #A0A5B5; /* Soft silver-slate */
+
+  --background: #050508;
+  --foreground: #FFFFFF;
+
+  /* Safe area insets for iOS notch / Dynamic Island / Android cutouts */
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+}
+
+/* ── Light mode values ── */
+html.light {
+  --t-surface: #FBFBFD;
+  --t-glass: rgba(245, 245, 248, 0.90);
+  --t-card: #FFFFFF;
+  --t-accent: #C59B27;
+  --t-violet: #B07474;
+  --t-text: #121215;
+  --t-muted: #4A4D55;
+
+  --background: #FBFBFD;
+  --foreground: #121215;
+}
+
+/* ── Tailwind theme tokens → runtime vars ── */
+@theme {
+  --color-cyber-slate: var(--t-surface);
+  --color-onyx-glass: var(--t-glass);
+  --color-onyx-card: var(--t-card);
+  --color-accent-lime: var(--t-accent);
+  --color-accent-violet: var(--t-violet);
+  --color-ice-white: var(--t-text);
+  --color-silver-slate: var(--t-muted);
+
+  --font-sans: var(--font-inter), sans-serif;
+  --font-display: var(--font-space-grotesk), sans-serif;
+}
+
+/* ═══ BODY ═══ */
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Make font-light (weight 300) slightly bolder in dark mode to improve subpixel contrast */
+.font-light {
+  font-weight: 300;
+}
+:root .font-light {
+  font-weight: 350;
+}
+html.light .font-light {
+  font-weight: 300;
+}
+
+/* ═══ GLASSMORPHISM ═══ */
+.glass-panel {
+  background: var(--t-glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.glass-panel-lime {
+  background: var(--t-glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, var(--t-accent) 18%, transparent);
+}
+.glass-panel-violet {
+  background: var(--t-glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, var(--t-violet) 20%, transparent);
+}
+
+/* ═══ LIGHT MODE — GLASS & BORDERS ═══ */
+html.light .glass-panel { border-color: rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.7); }
+html.light .glass-panel-lime { background: rgba(255, 255, 255, 0.7); }
+html.light .glass-panel-violet { background: rgba(255, 255, 255, 0.7); }
+
+/* ═══ LIGHT MODE — CTA BUTTON CONTRAST ═══ */
+html.light .bg-accent-lime.text-cyber-slate,
+html.light [class*="bg-accent-lime/"].text-cyber-slate {
+  color: #FFFFFF !important;
+}
+
+/* ═══ LIGHT MODE — BORDER & BG OPACITY OVERRIDES ═══ */
+html.light .border-white\/5 { border-color: rgba(0, 0, 0, 0.08); }
+html.light .border-white\/10 { border-color: rgba(0, 0, 0, 0.10); }
+html.light .border-white\/20 { border-color: rgba(0, 0, 0, 0.12); }
+html.light .bg-white\/5 { background-color: rgba(0, 0, 0, 0.03); }
+html.light .bg-white\/10 { background-color: rgba(0, 0, 0, 0.05); }
+html.light .bg-onyx-card\/30 { background-color: rgba(255, 255, 255, 0.6); }
+html.light .bg-onyx-card\/40 { background-color: rgba(255, 255, 255, 0.65); }
+html.light .bg-onyx-card\/60 { background-color: rgba(255, 255, 255, 0.8); }
+html.light .bg-onyx-card\/25 { background-color: rgba(255, 255, 255, 0.5); }
+
+/* ═══ LIGHT MODE — INNER CARD BG FIX ═══ */
+/* bg-cyber-slate used as inner card backgrounds becomes light surface — add subtle differentiation */
+html.light .bg-cyber-slate { background-color: #F0EFF4; }
+html.light [class*="bg-cyber-slate\/"] { background-color: rgba(240, 239, 244, 0.6); }
+
+/* ═══ LIGHT MODE — SHADOW ADJUSTMENTS ═══ */
+html.light [class*="shadow-accent-lime"] { --tw-shadow-color: rgba(197, 155, 39, 0.12); }
+html.light [class*="shadow-accent-violet"] { --tw-shadow-color: rgba(176, 116, 116, 0.10); }
+
+/* ═══ LIGHT MODE — MISC ═══ */
+html.light ::selection { background: var(--t-accent); color: #FFFFFF; }
+html.light .focus-ring:focus-visible {
+  box-shadow: 0 0 0 2px #F8F7FA, 0 0 0 4px var(--t-accent);
+}
+
+/* ═══ THEME TRANSITION ═══ */
+html {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ═══ SAFE AREA UTILITIES ═══ */
+.safe-top { padding-top: var(--sat); }
+.safe-bottom { padding-bottom: var(--sab); }
+.safe-left { padding-left: var(--sal); }
+.safe-right { padding-right: var(--sar); }
+.safe-x { padding-left: var(--sal); padding-right: var(--sar); }
+.safe-y { padding-top: var(--sat); padding-bottom: var(--sab); }
+.safe-all {
+  padding-top: var(--sat);
+  padding-right: var(--sar);
+  padding-bottom: var(--sab);
+  padding-left: var(--sal);
+}
+
+/* ═══ TOUCH TARGET ═══ */
+.touch-target {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* ═══ RESPONSIVE CONTAINER ═══ */
+.page-container {
+  width: 100%;
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: max(1rem, var(--sal));
+  padding-right: max(1rem, var(--sar));
+}
+@media (min-width: 640px) {
+  .page-container { padding-left: max(1.5rem, var(--sal)); padding-right: max(1.5rem, var(--sar)); }
+}
+@media (min-width: 768px) {
+  .page-container { padding-left: max(2rem, var(--sal)); padding-right: max(2rem, var(--sar)); }
+}
+@media (min-width: 1024px) {
+  .page-container { padding-left: max(3rem, var(--sal)); padding-right: max(3rem, var(--sar)); }
+}
+
+/* ═══ RESPONSIVE TYPOGRAPHY ═══ */
+@media (min-width: 768px) and (max-width: 1023px) {
+  html { font-size: 17px; }
+}
+
+/* ═══ FOLDABLE SUPPORT ═══ */
+@media (horizontal-viewport-segments: 2) {
+  .fold-span-all { grid-column: 1 / -1; }
+  .fold-left { margin-right: env(viewport-segment-right 0 0, 0px); }
+  .fold-right { margin-left: env(viewport-segment-left 1 0, 0px); }
+}
+
+/* ═══ iOS STANDALONE ═══ */
+@media (display-mode: standalone) {
+  body { padding-top: var(--sat); }
+}
+
+/* ═══ SCROLLBAR ═══ */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--t-surface); }
+::-webkit-scrollbar-thumb { background: var(--t-card); border-radius: 4px; border: 2px solid var(--t-surface); }
+::-webkit-scrollbar-thumb:hover { background: var(--t-accent); }
+
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
+/* ═══ ANIMATIONS ═══ */
+@keyframes scan {
+  0% { top: 0%; opacity: 0.8; }
+  50% { top: 100%; opacity: 0.8; }
+  100% { top: 0%; opacity: 0.8; }
+}
+.animate-scan-line {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--t-accent), transparent);
+  box-shadow: 0 0 12px var(--t-accent);
+  animation: scan 4s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes grid-glow {
+  0% { opacity: 0.15; }
+  50% { opacity: 0.35; }
+  100% { opacity: 0.15; }
+}
+.animate-grid-glow { animation: grid-glow 3s ease-in-out infinite; }
+
+@keyframes pulse-glow {
+  0% { transform: scale(0.95); opacity: 0.2; }
+  50% { transform: scale(1.05); opacity: 0.4; }
+  100% { transform: scale(0.95); opacity: 0.2; }
+}
+.pulse-glow-lime {
+  position: absolute;
+  width: 250px; height: 250px;
+  background: var(--t-accent);
+  filter: blur(100px);
+  border-radius: 50%;
+  animation: pulse-glow 6s ease-in-out infinite;
+  pointer-events: none;
+}
+.pulse-glow-violet {
+  position: absolute;
+  width: 300px; height: 300px;
+  background: var(--t-violet);
+  filter: blur(120px);
+  border-radius: 50%;
+  animation: pulse-glow 8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes scaleUp {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-fadeIn { animation: fadeIn 0.4s ease-out both; }
+.animate-scaleUp { animation: scaleUp 0.35s ease-out both; }
+.animate-slideInRight { animation: slideInRight 0.35s ease-out both; }
+.animate-slideInLeft { animation: slideInLeft 0.35s ease-out both; }
+
+/* ═══ PROGRESS BAR ═══ */
+.transition-width {
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ═══ FOCUS RING ═══ */
+.focus-ring { outline: none; }
+.focus-ring:focus-visible {
+  box-shadow: 0 0 0 2px var(--t-surface), 0 0 0 4px var(--t-accent);
+}
+
+/* ═══ LIGHT MODE IMAGE LOGO FILTER ═══ */
+html.light .light-mode-invert {
+  filter: brightness(0.18) contrast(1.1) !important;
+}
+

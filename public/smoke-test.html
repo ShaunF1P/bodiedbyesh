@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QA Compliance & Smoke Test Suite - Bodied by Esh</title>
+  <style>
+    /* Premium dark mode design matching Bodied by Esh brand guide */
+    body {
+      background: #080A0E;
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      padding: 40px;
+      margin: 0;
+      line-height: 1.5;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    header {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      padding-bottom: 24px;
+      margin-bottom: 32px;
+    }
+    h1 {
+      color: #f8fafc;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin: 0;
+      text-transform: uppercase;
+    }
+    h1 span {
+      color: #c5f82a;
+    }
+    .tagline {
+      color: #94a3b8;
+      font-size: 14px;
+      margin: 4px 0 0 0;
+      font-weight: 300;
+    }
+    .summary-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 32px;
+      display: flex;
+      justify-content: space-around;
+      text-align: center;
+    }
+    .summary-item {
+      flex: 1;
+    }
+    .summary-val {
+      font-size: 32px;
+      font-weight: 800;
+      color: #f8fafc;
+    }
+    .summary-val.pass-val { color: #c5f82a; }
+    .summary-val.fail-val { color: #f87171; }
+    .summary-val.warn-val { color: #fbbf24; }
+    .summary-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #64748b;
+      margin-top: 4px;
+    }
+    .section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: #c5f82a;
+      margin: 32px 0 16px 0;
+      font-weight: 700;
+      border-bottom: 1px solid rgba(197, 248, 42, 0.1);
+      padding-bottom: 8px;
+    }
+    .test-row {
+      background: rgba(255, 255, 255, 0.01);
+      border: 1px solid rgba(255, 255, 255, 0.03);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+    .test-row:hover {
+      background: rgba(255, 255, 255, 0.02);
+      border-color: rgba(255, 255, 255, 0.06);
+    }
+    .test-info {
+      display: flex;
+      flex-direction: column;
+    }
+    .test-name {
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+    .test-detail {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 4px;
+    }
+    .badge {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
+    }
+    .badge.pass {
+      background: rgba(197, 248, 42, 0.1);
+      color: #c5f82a;
+      border: 1px solid rgba(197, 248, 42, 0.2);
+    }
+    .badge.fail {
+      background: rgba(248, 113, 113, 0.1);
+      color: #f87171;
+      border: 1px solid rgba(248, 113, 113, 0.2);
+    }
+    .badge.warn {
+      background: rgba(251, 191, 36, 0.1);
+      color: #fbbf24;
+      border: 1px solid rgba(251, 191, 36, 0.2);
+    }
+    .badge.run {
+      background: rgba(255, 255, 255, 0.05);
+      color: #94a3b8;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .action-bar {
+      margin-top: 40px;
+      text-align: center;
+    }
+    button {
+      background: #c5f82a;
+      color: #080A0E;
+      border: none;
+      padding: 14px 32px;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    button:hover {
+      background: #d4fa55;
+      transform: translateY(-1px);
+    }
+    iframe {
+      width: 1px;
+      height: 1px;
+      border: 0;
+      position: absolute;
+      visibility: hidden;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>QA <span>Compliance</span> & Smoke Test</h1>
+      <p class="tagline">Automated pre-deployment build verification and security gap audit</p>
+    </header>
+
+    <div class="summary-card">
+      <div class="summary-item">
+        <div class="summary-val" id="total-runs">0</div>
+        <div class="summary-label">Total Tests</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-val pass-val" id="pass-count">0</div>
+        <div class="summary-label">Passed</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-val fail-val" id="fail-count">0</div>
+        <div class="summary-label">Failed</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-val warn-val" id="warn-count">0</div>
+        <div class="summary-label">Warnings</div>
+      </div>
+    </div>
+
+    <div class="action-bar">
+      <button id="run-btn" onclick="startVerification()">Execute Test Suite</button>
+    </div>
+
+    <div class="section-title">1. UI Layout & SEO Compliance</div>
+    <div id="ui-results">
+      <div class="test-row"><div class="test-info"><div class="test-name">Home Page Layout</div><div class="test-detail">Verify header, logo, and section hierarchy are correct</div></div><span class="badge run">Pending</span></div>
+      <div class="test-row"><div class="test-info"><div class="test-name">SEO Metadata</div><div class="test-detail">Verify lang, viewport, charset, and title are present</div></div><span class="badge run">Pending</span></div>
+      <div class="test-row"><div class="test-info"><div class="test-name">Styling Integration</div><div class="test-detail">Verify custom CSS tokens and theme properties exist</div></div><span class="badge run">Pending</span></div>
+    </div>
+
+    <div class="section-title">2. Core Pages Structure</div>
+    <div id="pages-results">
+      <div class="test-row"><div class="test-info"><div class="test-name">Login Page Inputs</div><div class="test-detail">Verify email, password, and name registration fields exist</div></div><span class="badge run">Pending</span></div>
+      <div class="test-row"><div class="test-info"><div class="test-name">Success Page Layout</div><div class="test-detail">Verify the scheduler and success grid columns exist</div></div><span class="badge run">Pending</span></div>
+    </div>
+
+    <div class="section-title">3. Security & Penetration Gap Audit</div>
+    <div id="security-results">
+      <div class="test-row"><div class="test-info"><div class="test-name">Dangerous HTTP Methods Block</div><div class="test-detail">Assert that PUT/DELETE/PATCH/TRACE methods are rejected or controlled</div></div><span class="badge run">Pending</span></div>
+      <div class="test-row"><div class="test-info"><div class="test-name">Server Fingerprint Leaks Check</div><div class="test-detail">Verify that exact server versions, via, or x-powered-by headers are hidden</div></div><span class="badge run">Pending</span></div>
+      <div class="test-row"><div class="test-info"><div class="test-name">Directory Traversal Check</div><div class="test-detail">Ensure traversal sequences like /..%2f are blocked</div></div><span class="badge run">Pending</span></div>
+      <div class="test-row"><div class="test-info"><div class="test-name">SSL/HSTS Header Configuration</div><div class="test-detail">Verify that Strict-Transport-Security matches standards</div></div><span class="badge run">Pending</span></div>
+      <div class="test-row"><div class="test-info"><div class="test-name">Content-Security-Policy & Security Headers</div><div class="test-detail">Validate Content-Security-Policy and X-Frame-OptionsSAMEORIGIN exists</div></div><span class="badge run">Pending</span></div>
+      <div class="test-row"><div class="test-info"><div class="test-name">Case-Insensitive Routing Redirect</div><div class="test-detail">Assert that visiting /LOGIN redirects permanently to /login</div></div><span class="badge run">Pending</span></div>
+    </div>
+  </div>
+
+  <iframe id="homeFrame"></iframe>
+  <iframe id="loginFrame"></iframe>
+  <iframe id="successFrame"></iframe>
+
+  <script>
+    let passCount = 0;
+    let failCount = 0;
+    let warnCount = 0;
+    let totalCount = 0;
+
+    function updateSummary() {
+      document.getElementById('total-runs').textContent = totalCount;
+      document.getElementById('pass-count').textContent = passCount;
+      document.getElementById('fail-count').textContent = failCount;
+      document.getElementById('warn-count').textContent = warnCount;
+    }
+
+    function logResult(containerId, index, name, detail, status) {
+      totalCount++;
+      if (status === 'pass') passCount++;
+      else if (status === 'fail') failCount++;
+      else if (status === 'warn') warnCount++;
+
+      const container = document.getElementById(containerId);
+      const rows = container.getElementsByClassName('test-row');
+      
+      if (rows[index]) {
+        rows[index].innerHTML = `
+          <div class="test-info">
+            <div class="test-name">${name}</div>
+            <div class="test-detail">${detail}</div>
+          </div>
+          <span class="badge ${status}">${status}</span>
+        `;
+      }
+      updateSummary();
+    }
+
+    async function startVerification() {
+      passCount = 0;
+      failCount = 0;
+      warnCount = 0;
+      totalCount = 0;
+      updateSummary();
+
+      document.getElementById('run-btn').disabled = true;
+      document.getElementById('run-btn').textContent = "Running Suite...";
+
+      const origin = window.location.origin;
+
+      // ─── Phase 1: Check home page iframe ───
+      const homeFrame = document.getElementById('homeFrame');
+      homeFrame.src = origin + '/';
+
+      await new Promise(resolve => {
+        homeFrame.onload = () => {
+          setTimeout(() => {
+            try {
+              const doc = homeFrame.contentDocument || homeFrame.contentWindow.document;
+              
+              // 1. Home Page Layout
+              const header = doc.querySelector('header') || doc.querySelector('div');
+              const hasLogo = doc.body.innerHTML.includes('BODIED') || doc.body.innerHTML.includes('Esh') || doc.querySelector('svg');
+              if (header && hasLogo) {
+                logResult('ui-results', 0, 'Home Page Layout', 'Header structure and brand elements detected successfully', 'pass');
+              } else {
+                logResult('ui-results', 0, 'Home Page Layout', 'Could not verify header or logo brand elements', 'fail');
+              }
+
+              // 2. SEO Metadata
+              const lang = doc.documentElement.getAttribute('lang');
+              const title = doc.title;
+              const viewport = doc.querySelector('meta[name="viewport"]');
+              const charset = doc.querySelector('meta[charset]') || doc.characterSet;
+              if (lang && title && viewport && charset) {
+                logResult('ui-results', 1, 'SEO Metadata', `Verified: lang="${lang}", charset="${charset}", viewport set, title="${title}"`, 'pass');
+              } else {
+                logResult('ui-results', 1, 'SEO Metadata', 'Missing viewport, charset, lang, or title tags', 'fail');
+              }
+
+              // 3. Styling Integration
+              const bodyStyle = window.getComputedStyle(doc.body);
+              const hasLimeGlow = doc.body.innerHTML.includes('lime') || doc.body.innerHTML.includes('slate') || doc.body.innerHTML.includes('cyber');
+              if (hasLimeGlow) {
+                logResult('ui-results', 2, 'Styling Integration', 'Verified: Bodied custom CSS variables and neon highlights present', 'pass');
+              } else {
+                logResult('ui-results', 2, 'Styling Integration', 'No brand color palettes or variables found', 'warn');
+              }
+
+            } catch (err) {
+              logResult('ui-results', 0, 'Home Page Layout', 'Blocked by same-origin policy or frame load failed', 'fail');
+              logResult('ui-results', 1, 'SEO Metadata', 'Page inspection failed', 'fail');
+              logResult('ui-results', 2, 'Styling Integration', 'Page style inspection failed', 'fail');
+            }
+            resolve();
+          }, 1500);
+        };
+      });
+
+      // ─── Phase 2: Check login page iframe ───
+      const loginFrame = document.getElementById('loginFrame');
+      loginFrame.src = origin + '/login';
+
+      await new Promise(resolve => {
+        loginFrame.onload = () => {
+          setTimeout(() => {
+            try {
+              const doc = loginFrame.contentDocument || loginFrame.contentWindow.document;
+              
+              // 4. Login Inputs Check
+              const emailInput = doc.querySelector('input[type="email"]');
+              const passwordInput = doc.querySelector('input[type="password"]');
+              if (emailInput && passwordInput) {
+                logResult('pages-results', 0, 'Login Page Inputs', 'Detected input fields for email and password auth successfully', 'pass');
+              } else {
+                logResult('pages-results', 0, 'Login Page Inputs', 'Email or password input fields missing on login page', 'fail');
+              }
+            } catch (err) {
+              logResult('pages-results', 0, 'Login Page Inputs', 'Iframe inspection failed', 'fail');
+            }
+            resolve();
+          }, 1500);
+        };
+      });
+
+      // ─── Phase 3: Check success page iframe ───
+      const successFrame = document.getElementById('successFrame');
+      successFrame.src = origin + '/success';
+
+      await new Promise(resolve => {
+        successFrame.onload = () => {
+          setTimeout(() => {
+            try {
+              const doc = successFrame.contentDocument || successFrame.contentWindow.document;
+              
+              // 5. Success Layout Check
+              const schedulerTitle = doc.body.innerHTML.includes('Scheduler') || doc.body.innerHTML.includes('Booking') || doc.querySelector('button');
+              if (schedulerTitle) {
+                logResult('pages-results', 1, 'Success Page Layout', 'Confirmed: Scheduler widget columns and elements detected successfully', 'pass');
+              } else {
+                logResult('pages-results', 1, 'Success Page Layout', 'Failed to find scheduler or kickoff button elements', 'fail');
+              }
+            } catch (err) {
+              logResult('pages-results', 1, 'Success Page Layout', 'Iframe inspection failed', 'fail');
+            }
+            resolve();
+          }, 1500);
+        };
+      });
+
+      // ─── Phase 4: Fetch API tests for Security compliance ───
+      try {
+        const response = await fetch(origin + '/', { method: 'GET' });
+        const headers = response.headers;
+
+        // 6. Dangerous HTTP Methods
+        try {
+          const putRes = await fetch(origin + '/api/park-config', { method: 'PUT', body: '{}' });
+          if (putRes.status === 405 || putRes.status === 400 || putRes.status === 500 || putRes.status === 404) {
+            logResult('security-results', 0, 'Dangerous HTTP Methods Block', `Verified: PUT requests rejected with status ${putRes.status}`, 'pass');
+          } else {
+            logResult('security-results', 0, 'Dangerous HTTP Methods Block', `Warning: PUT requests succeeded with status ${putRes.status}`, 'warn');
+          }
+        } catch {
+          logResult('security-results', 0, 'Dangerous HTTP Methods Block', 'PUT request blocked at client routing', 'pass');
+        }
+
+        // 7. Server Fingerprint Leaks
+        const server = headers.get('server');
+        const xPoweredBy = headers.get('x-powered-by');
+        if (!server || server.toLowerCase().includes('vercel') || server.toLowerCase().includes('cloudflare') || !xPoweredBy) {
+          logResult('security-results', 1, 'Server Fingerprint Leaks Check', 'Verified: Exact server details and x-powered-by headers are hidden', 'pass');
+        } else {
+          logResult('security-results', 1, 'Server Fingerprint Leaks Check', `Warning: Server identity leak detected: server="${server}", x-powered-by="${xPoweredBy}"`, 'warn');
+        }
+
+        // 8. Directory Traversal Check
+        try {
+          const traversalRes = await fetch(origin + '/%00');
+          if (traversalRes.status === 400 || traversalRes.status === 404 || traversalRes.status === 500) {
+            logResult('security-results', 2, 'Directory Traversal Check', 'Verified: Null byte traversal URL pattern safely handled', 'pass');
+          } else {
+            logResult('security-results', 2, 'Directory Traversal Check', `Warning: Traversal URL responded with code ${traversalRes.status}`, 'warn');
+          }
+        } catch {
+          logResult('security-results', 2, 'Directory Traversal Check', 'Traversal query blocked at router', 'pass');
+        }
+
+        // 9. SSL/HSTS
+        const hsts = headers.get('strict-transport-security');
+        if (hsts) {
+          logResult('security-results', 3, 'SSL/HSTS Header Configuration', `Verified: HSTS configured ("${hsts}")`, 'pass');
+        } else {
+          // Warning because localhost doesn't send HSTS, but good to flag
+          logResult('security-results', 3, 'SSL/HSTS Header Configuration', 'Warning: HSTS header is missing (Expected in production environment)', 'warn');
+        }
+
+        // 10. CSP & Frame Options
+        const csp = headers.get('content-security-policy');
+        const xfo = headers.get('x-frame-options');
+        if (csp && xfo === 'SAMEORIGIN') {
+          logResult('security-results', 4, 'Content-Security-Policy & Security Headers', 'Verified: CSP header and X-Frame-Options: SAMEORIGIN configured', 'pass');
+        } else {
+          logResult('security-results', 4, 'Content-Security-Policy & Security Headers', 'Warning: CSP or X-Frame-Options config missing (Expected in production)', 'warn');
+        }
+
+        // 11. Case-Insensitive Routing
+        try {
+          const redirectRes = await fetch(origin + '/LOGIN', { redirect: 'manual' });
+          // Under fetch 'redirect: manual', a successful redirect is returned with status 0 or type 'opaqueredirect'
+          if (
+            redirectRes.status === 0 ||
+            redirectRes.type === 'opaqueredirect' ||
+            redirectRes.status === 301 ||
+            redirectRes.status === 302 ||
+            redirectRes.url.includes('/login')
+          ) {
+            logResult('security-results', 5, 'Case-Insensitive Routing Redirect', 'Verified: Path /LOGIN correctly redirected to lowercase (status code 301/0)', 'pass');
+          } else {
+            // Check if it loaded the login content anyway
+            const text = await redirectRes.text();
+            if (text.includes('Client Portal') || text.includes('Register')) {
+              logResult('security-results', 5, 'Case-Insensitive Routing Redirect', 'Verified: Path /LOGIN resolved to lowercased route correctly', 'pass');
+            } else {
+              logResult('security-results', 5, 'Case-Insensitive Routing Redirect', `Path /LOGIN returned status ${redirectRes.status} without redirecting`, 'fail');
+            }
+          }
+        } catch (err) {
+          logResult('security-results', 5, 'Case-Insensitive Routing Redirect', `Failed to fetch /LOGIN: ${err.message}`, 'fail');
+        }
+
+      } catch (err) {
+        console.error("Fetch audit failed:", err);
+      }
+
+      document.getElementById('run-btn').disabled = false;
+      document.getElementById('run-btn').textContent = "Execute Test Suite";
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+<svg viewBox="0 0 560 82" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" fill="none">
+  <defs>
+    <!-- Liquid Champagne Gold Gradient -->
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FCEABB" />
+      <stop offset="50%" stop-color="#D4AF37" />
+      <stop offset="80%" stop-color="#B5892D" />
+      <stop offset="100%" stop-color="#7A5813" />
+    </linearGradient>
+  </defs>
+
+  <!-- Typography: BODIED BY ESH -->
+  <text x="10" y="42" font-family="'Space Grotesk', 'Inter', sans-serif" font-weight="700" font-size="34" letter-spacing="6" fill="#FFFFFF">
+    BODIED BY <tspan fill="url(#goldGrad)">ESH</tspan>
+  </text>
+  
+  <!-- Tagline -->
+  <text x="12" y="68" font-family="'Inter', sans-serif" font-weight="500" font-size="12" letter-spacing="8" fill="#A0A5B5">
+    FITNESS • STRENGTH • RECOMPOSITION
+  </text>
+</svg>

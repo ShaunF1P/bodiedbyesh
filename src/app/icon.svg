@@ -1,0 +1,49 @@
+<svg viewBox="0 0 120 140" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" fill="none">
+  <defs>
+    <!-- Liquid Champagne Gold Gradient -->
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FCEABB" />
+      <stop offset="50%" stop-color="#D4AF37" />
+      <stop offset="80%" stop-color="#B5892D" />
+      <stop offset="100%" stop-color="#7A5813" />
+    </linearGradient>
+    
+    <!-- Matte Charcoal / Black Ceramic Gradient -->
+    <linearGradient id="ceramicGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2C2D35" />
+      <stop offset="100%" stop-color="#0B0B0D" />
+    </linearGradient>
+
+    <!-- Clip Paths for Diagonal Slice -->
+    <clipPath id="topLeftSlice">
+      <polygon points="-10,-10 130,-10 -10,130" />
+    </clipPath>
+    <clipPath id="bottomRightSlice">
+      <polygon points="130,130 130,-10 -10,130" />
+    </clipPath>
+  </defs>
+
+  <!-- Outer Premium Hexagon Border -->
+  <polygon points="60,5 115,35 115,105 60,135 5,105 5,35" stroke="url(#goldGrad)" stroke-width="3" fill="#050508" clip-path="url(#topLeftSlice)" />
+  <polygon points="60,5 115,35 115,105 60,135 5,105 5,35" stroke="url(#ceramicGrad)" stroke-width="3" fill="#050508" clip-path="url(#bottomRightSlice)" />
+  
+  <!-- Thin diagonal divider gap -->
+  <line x1="5" y1="105" x2="115" y2="35" stroke="#050508" stroke-width="4" />
+
+  <!-- Monogram BE -->
+  <g clip-path="url(#topLeftSlice)">
+    <path d="M35,95 L65,35 h12 L47,95 Z" fill="url(#goldGrad)" />
+    <path d="M65,95 L95,35 h12 L77,95 Z" fill="url(#goldGrad)" />
+    <rect x="42" y="47" width="55" height="10" rx="2" fill="url(#goldGrad)" />
+    <rect x="36" y="70" width="55" height="10" rx="2" fill="url(#goldGrad)" />
+    <rect x="30" y="93" width="55" height="10" rx="2" fill="url(#goldGrad)" />
+  </g>
+
+  <g clip-path="url(#bottomRightSlice)">
+    <path d="M35,95 L65,35 h12 L47,95 Z" fill="url(#ceramicGrad)" />
+    <path d="M65,95 L95,35 h12 L77,95 Z" fill="url(#ceramicGrad)" />
+    <rect x="42" y="47" width="55" height="10" rx="2" fill="url(#ceramicGrad)" />
+    <rect x="36" y="70" width="55" height="10" rx="2" fill="url(#ceramicGrad)" />
+    <rect x="30" y="93" width="55" height="10" rx="2" fill="url(#ceramicGrad)" />
+  </g>
+</svg>

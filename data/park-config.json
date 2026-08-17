@@ -1,0 +1,22 @@
+{
+  "activePark": {
+    "name": "Merrit Park",
+    "city": "Delray Beach, FL",
+    "address": "601 N Congress Ave, Delray Beach, FL 33445",
+    "meetingSpot": "Grassy area near the east pavilion by the playground",
+    "googleMapsUrl": "https://maps.google.com/?q=Merrit+Park+Delray+Beach+FL"
+  },
+  "schedule": [
+    { "day": "Monday & Wednesday", "time": "6:15 PM", "duration": "60 min" },
+    { "day": "Tuesday & Thursday", "time": "6:15 PM", "duration": "60 min" }
+  ],
+  "whatToBring": [
+    "Personal training mat",
+    "Water bottle (hydration is non-negotiable)",
+    "Booty bands",
+    "Training gloves (if needed)"
+  ],
+  "coachNotes": "Limited spots available! Sessions start exactly 10 minutes after kids' drop-off. Arrive 5 minutes early to warm up. Rain policy: if it's lightning, we reschedule via SMS within 1 hour.",
+  "isAcceptingNewClients": true,
+  "lastUpdated": "2026-06-19T12:56:00Z"
+}
