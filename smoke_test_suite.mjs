@@ -133,6 +133,6 @@ export async function runAllSmokeTests() {
   }
 }
 
-if (process.argv[1].endsWith('smoke_test_suite.mjs')) {
+if (process.argv[1] && process.argv[1].endsWith('smoke_test_suite.mjs')) {
   runAllSmokeTests();
 }
