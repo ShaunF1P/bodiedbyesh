@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { Mail, MapPin } from "lucide-react";
+import { Mail, MapPin, Lock } from "lucide-react";
 
 export default function Footer() {
   return (
@@ -94,6 +94,12 @@ export default function Footer() {
                 Brand Feedback
               </Link>
             </li>
+            <li>
+              <Link href="/admin" className="hover:text-accent-lime hover:pl-1 transition-all duration-300 flex items-center gap-1.5 text-accent-lime/90 font-medium">
+                <Lock className="w-3 h-3 text-accent-lime" />
+                <span>Coach Login</span>
+              </Link>
+            </li>
           </ul>
         </div>
 
@@ -161,10 +167,21 @@ export default function Footer() {
       {/* Sub-footer */}
       <div className="max-w-7xl mx-auto border-t border-white/5 mt-12 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-silver-slate/50 font-light relative z-10">
         <p>&copy; {new Date().getFullYear()} Bodied by Esh. All rights reserved.</p>
-        <p className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-accent-lime" />
-          Sideline Recomp System
-        </p>
+        
+        <div className="flex items-center gap-4">
+          <Link
+            href="/admin"
+            className="flex items-center gap-1.5 text-silver-slate/70 hover:text-accent-lime transition-colors"
+          >
+            <Lock className="w-3 h-3 text-accent-lime" />
+            <span>Admin / Coach Login</span>
+          </Link>
+          <span className="text-white/10">•</span>
+          <p className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-accent-lime" />
+            Sideline Recomp System
+          </p>
+        </div>
       </div>
     </footer>
   );
