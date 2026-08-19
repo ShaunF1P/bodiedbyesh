@@ -102,8 +102,32 @@ export async function runAllSmokeTests() {
     headers: { 'x-admin-pin': '0408' },
   }));
 
-  // 4. Client Core APIs & AI Services
-  console.log(`\n--- [4/4] Testing Client Workout & AI Services ---`);
+  // 4. Health Tracker Auto-Sync & Client Core APIs
+  console.log(`\n--- [4/5] Testing Health Tracker Auto-Sync Services ---`);
+  results.push(await testEndpoint('Health Tracker Supported Providers (GET)', '/api/sync/health'));
+  results.push(await testEndpoint('Apple Health Auto-Sync (POST)', '/api/sync/health', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      provider: 'apple_health',
+      userId: 'test-qa-user',
+      steps: 8250,
+      deviceModel: 'Apple Watch Series 9',
+    }),
+  }));
+  results.push(await testEndpoint('Google Health Connect Auto-Sync (POST)', '/api/sync/health', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      provider: 'google_health',
+      userId: 'test-qa-user',
+      steps: 10400,
+      deviceModel: 'Google Pixel Watch 2',
+    }),
+  }));
+
+  // 5. Client Workout & AI Nutrition Services
+  console.log(`\n--- [5/5] Testing Client Workout & AI Services ---`);
   results.push(await testEndpoint('Park Config API (GET)', '/api/park-config'));
   results.push(await testEndpoint('Client Logged Sets Unauthorized Barrier (POST)', '/api/client/logged-sets', {
     method: 'POST',

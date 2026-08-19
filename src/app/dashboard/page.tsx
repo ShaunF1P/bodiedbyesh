@@ -14,6 +14,7 @@ import ChatWidget from "@/components/ChatWidget";
 import AdminClientSwitcher, { RosterClient } from "@/components/AdminClientSwitcher";
 import TransformationStudio from "@/components/TransformationStudio";
 import CoachingVideoPlayer from "@/components/CoachingVideoPlayer";
+import { HealthTrackerSyncModal } from "@/components/coastal";
 import {
   Cpu,
   Heart,
@@ -105,6 +106,7 @@ export default function ClientDashboard() {
   // Admin View & Assist State
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [selectedAdminClient, setSelectedAdminClient] = useState<RosterClient | null>(null);
+  const [isHealthSyncModalOpen, setIsHealthSyncModalOpen] = useState(false);
 
   const loadClientDataForAdmin = async (clientInfo: RosterClient) => {
     setLoading(true);
@@ -1192,13 +1194,24 @@ export default function ClientDashboard() {
                   </div>
                 </div>
               </div>
-              <div className="mt-6 p-4 rounded-xl bg-accent-lime/5 border border-accent-lime/15">
-                <p className="text-accent-lime text-[10px] font-bold uppercase tracking-wider mb-1">
-                  Connect Your Devices
-                </p>
-                <p className="text-silver-slate text-xs">
-                  OAuth integration with Oura and Whoop coming soon. Currently showing simulated data.
-                </p>
+              <div className="mt-6 p-4 rounded-2xl bg-accent-lime/5 border border-accent-lime/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <p className="text-accent-lime text-[10px] font-bold uppercase tracking-wider mb-0.5 flex items-center gap-1.5">
+                    <Watch className="w-3.5 h-3.5" />
+                    <span>Auto-Sync Health & Step Counters</span>
+                  </p>
+                  <p className="text-silver-slate text-xs">
+                    Link Apple Health, Google Health Connect, Fitbit, Garmin, or Strava for real-time background step tracking.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsHealthSyncModalOpen(true)}
+                  className="px-4 py-2 rounded-xl bg-accent-lime text-obsidian-black text-xs font-bold hover:bg-accent-lime/90 transition-all cursor-pointer shrink-0 shadow-lg shadow-accent-lime/15 flex items-center justify-center gap-1.5"
+                >
+                  <Watch className="w-3.5 h-3.5" />
+                  <span>Connect Trackers</span>
+                </button>
               </div>
             </div>
           </div>
@@ -1468,6 +1481,19 @@ export default function ClientDashboard() {
       </footer>
 
       {profile && <ChatWidget clientId={profile.id} />}
+
+      <HealthTrackerSyncModal
+        isOpen={isHealthSyncModalOpen}
+        onClose={() => setIsHealthSyncModalOpen(false)}
+        userId={user?.id || profile?.id || "client-user"}
+        onSyncSuccess={(newLog) => {
+          setWearables((prev) => ({
+            ...prev,
+            steps: newLog.steps,
+          }));
+        }}
+      />
     </div>
   );
 }
+

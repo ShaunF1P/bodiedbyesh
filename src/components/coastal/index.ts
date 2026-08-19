@@ -11,4 +11,5 @@ export { default as MilestoneModal, getMilestoneIcon } from "./MilestoneModal";
 export { default as GroupProgress } from "./GroupProgress";
 export { default as Leaderboard } from "./Leaderboard";
 export { default as EncouragementFeed } from "./EncouragementFeed";
+export { default as HealthTrackerSyncModal } from "./HealthTrackerSyncModal";
 
