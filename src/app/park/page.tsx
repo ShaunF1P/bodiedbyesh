@@ -18,6 +18,7 @@ import {
   FileText,
   Loader2,
   AlertCircle,
+  ClipboardList,
 } from "lucide-react";
 
 interface ScheduleSlot {
@@ -156,11 +157,29 @@ export default function ParkProgram() {
               The Sideline Recomp Method:{" "}
               <span className="text-accent-lime">Park-to-Peak</span>
             </h1>
-            <p className="text-silver-slate text-lg font-light leading-relaxed">
+            <p className="text-silver-slate text-lg font-light leading-relaxed mb-6">
               Why spend 6 hours a week scrolling in your car or sitting on hard bleachers during your
               kids&apos; sports practices? We bring premium resistance training, structural movement
               patterns, and data-driven macro templates directly to the park.
             </p>
+
+            {/* Enrolled Track A Client Intake Banner */}
+            <div className="p-4 rounded-2xl bg-accent-lime/10 border border-accent-lime/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg shadow-accent-lime/5 mb-8">
+              <div className="flex items-center gap-2.5">
+                <ClipboardList className="w-5 h-5 text-accent-lime shrink-0" />
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-accent-lime">Already Enrolled for Park Sessions?</p>
+                  <p className="text-xs text-silver-slate font-light">Complete your required Track A on-site intake form, PAR-Q+ orthopedic screen, and schedule sync.</p>
+                </div>
+              </div>
+              <Link
+                href="/intake/park-to-peak"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-accent-lime text-cyber-slate font-bold text-xs uppercase tracking-wider hover:bg-accent-lime/90 transition-all shrink-0 shadow-md shadow-accent-lime/20"
+              >
+                Start Track A Intake
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
           </AnimateIn>
 
           {/* ─── Active Park Card ─── */}

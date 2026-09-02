@@ -3,7 +3,7 @@ import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Logo from "@/components/Logo";
-import { Sparkles, ArrowRight, ShieldCheck, CheckCircle2 } from "lucide-react";
+import { Sparkles, ArrowRight, ShieldCheck, CheckCircle2, ClipboardList } from "lucide-react";
 
 function ApplyPageInner() {
   const router = useRouter();
@@ -112,17 +112,40 @@ function ApplyPageInner() {
         <Link href="/">
           <Logo className="cursor-pointer" />
         </Link>
-        <Link
-          href="/"
-          className="text-xs uppercase tracking-wider font-bold text-silver-slate hover:text-white transition-all"
-        >
-          Exit Application
-        </Link>
+        <div className="flex items-center gap-4 sm:gap-6">
+          <Link
+            href="/intake"
+            className="text-xs uppercase tracking-wider font-bold text-accent-lime hover:underline flex items-center gap-1.5"
+          >
+            <ClipboardList className="w-3.5 h-3.5" />
+            Client Intake Forms
+          </Link>
+          <Link
+            href="/"
+            className="text-xs uppercase tracking-wider font-bold text-silver-slate hover:text-white transition-all"
+          >
+            Exit Application
+          </Link>
+        </div>
       </header>
 
       {/* Form Area */}
       <main className="flex-1 flex items-center justify-center px-6 py-12 md:py-16">
         <div className="glass-panel border-white/5 rounded-3xl p-8 max-w-lg w-full relative">
+          {/* Enrolled Client Callout */}
+          <div className="mb-6 p-3.5 rounded-2xl bg-accent-lime/10 border border-accent-lime/30 flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 text-accent-lime shrink-0" />
+              <span className="text-silver-slate">Already enrolled? Complete your onboarding form:</span>
+            </div>
+            <Link
+              href="/intake"
+              className="font-bold text-accent-lime hover:text-white underline shrink-0 flex items-center gap-1"
+            >
+              Intake Hub <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+
           {/* Canceled Payment Banner */}
           {showCanceled && (
             <div className="mb-6 p-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-yellow-300 text-sm font-medium animate-fadeIn">

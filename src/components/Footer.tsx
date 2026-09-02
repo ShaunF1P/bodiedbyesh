@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { Mail, MapPin, Lock } from "lucide-react";
+import { Mail, MapPin, Lock, ClipboardList } from "lucide-react";
 
 export default function Footer() {
   return (
@@ -10,10 +10,10 @@ export default function Footer() {
       {/* Top subtle border-glow line */}
       <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-accent-lime/20 to-transparent" />
       
-      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-10 items-start relative z-10">
+      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-8 items-start relative z-10">
         
         {/* Brand/Bio Column */}
-        <div className="md:col-span-4 space-y-4">
+        <div className="md:col-span-3 space-y-4">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-accent-lime animate-pulse" />
             <span className="font-display font-bold tracking-wider text-sm text-ice-white uppercase">
@@ -103,8 +103,38 @@ export default function Footer() {
           </ul>
         </div>
 
+        {/* Client Intake Column */}
+        <div className="md:col-span-2 space-y-4">
+          <div className="flex items-center gap-1.5">
+            <ClipboardList className="w-3.5 h-3.5 text-accent-lime" />
+            <h4 className="text-xs uppercase font-bold tracking-widest text-accent-lime">Client Intake</h4>
+          </div>
+          <ul className="space-y-2.5 text-sm text-silver-slate font-light">
+            <li>
+              <Link href="/intake" className="hover:text-accent-lime hover:pl-1 transition-all duration-300 font-medium text-accent-lime">
+                Intake Hub (All Forms)
+              </Link>
+            </li>
+            <li>
+              <Link href="/intake/park-to-peak" className="hover:text-accent-lime hover:pl-1 transition-all duration-300">
+                Track A: Park-to-Peak
+              </Link>
+            </li>
+            <li>
+              <Link href="/intake/executive-concierge" className="hover:text-accent-lime hover:pl-1 transition-all duration-300">
+                Track B: Executive
+              </Link>
+            </li>
+            <li>
+              <Link href="/intake/nutrition-metabolic" className="hover:text-accent-lime hover:pl-1 transition-all duration-300">
+                Nutrition &amp; Recomp
+              </Link>
+            </li>
+          </ul>
+        </div>
+
         {/* Community & Faith Column */}
-        <div className="md:col-span-3 space-y-4">
+        <div className="md:col-span-2 space-y-4">
           <h4 className="text-xs uppercase font-bold tracking-widest text-ice-white">Community & Faith</h4>
           <ul className="space-y-2.5 text-sm text-silver-slate font-light">
             <li>

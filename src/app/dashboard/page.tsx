@@ -50,6 +50,8 @@ import {
   ChevronRight,
   Calendar,
   Award,
+  ClipboardList,
+  ArrowRight,
 } from "lucide-react";
 
 // ── Tab definitions ──
@@ -682,6 +684,36 @@ export default function ClientDashboard() {
             <LogOut className="w-3.5 h-3.5" />
             Sign Out
           </button>
+        </div>
+      </div>
+
+      {/* Onboarding Intake Protocol Notice */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 lg:px-12 pt-6">
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-accent-lime/10 via-cyber-slate to-accent-violet/10 border border-accent-lime/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg shadow-accent-lime/5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-accent-lime/20 text-accent-lime flex items-center justify-center shrink-0">
+              <ClipboardList className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-accent-lime">Client Onboarding</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-accent-lime animate-pulse" />
+              </div>
+              <h3 className="text-sm font-bold text-ice-white">Clinical Intake &amp; Bio-Telemetry Architecture</h3>
+              <p className="text-xs text-silver-slate font-light">
+                Need to complete or update your initial PAR-Q+, schedule sync, or metabolic baseline form?
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+            <Link
+              href="/intake"
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-full bg-accent-lime hover:bg-accent-lime/90 text-cyber-slate font-bold text-xs uppercase tracking-wider transition-all shadow-md shadow-accent-lime/20 text-center"
+            >
+              Access Intake Forms
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
         </div>
       </div>
 
