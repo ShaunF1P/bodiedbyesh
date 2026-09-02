@@ -1,5 +1,10 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireAdminSession } from "@/lib/auth/admin";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
+import { validateRequestBody } from "@/lib/validation/api-validator";
+import { LogoFeedbackPostSchema } from "@/lib/validation/schemas";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -32,13 +37,19 @@ create policy "Allow public select for service role" on public.logo_feedback for
 `;
 
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { clientName, favorites, hearts, eliminated, notes } = body;
+  // ── Rate Limiting (5 requests/minute per IP) ──────────────────────────
+  const rateLimit = checkRateLimit(request, "form");
+  if (!rateLimit.success) {
+    return rateLimitResponse(rateLimit);
+  }
 
-    if (!clientName || !clientName.trim()) {
-      return Response.json({ error: "Client name is required" }, { status: 400 });
-    }
+  const validation = await validateRequestBody(request, LogoFeedbackPostSchema);
+  if (!validation.success) {
+    return validation.response;
+  }
+
+  try {
+    const { clientName, favorites, hearts, eliminated, notes } = validation.data;
 
     const supabase = getSupabase();
 
@@ -72,7 +83,7 @@ export async function POST(request: NextRequest) {
 
     // Fallback: If insert fails due to missing hearts column (undefined_column 42703 or error message)
     if (error && (error.code === "42703" || (error.message && error.message.includes("hearts")))) {
-      console.warn("Table does not have 'hearts' column. Saving hearts in notes fallback...");
+      logger.warn("Table does not have 'hearts' column. Saving hearts in notes fallback...");
       const fallbackNotes = `${baseNotes}\n\n[Top Picks (Hearts): ${(hearts || []).join(", ")}]`;
       
       const fallbackResponse = await supabase
@@ -90,7 +101,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (error) {
-      console.error("Supabase error saving logo feedback:", error);
+      logger.error("Supabase error saving logo feedback:", error);
       if (error.code === "42P01") {
         // Table does not exist
         return Response.json({
@@ -104,19 +115,16 @@ export async function POST(request: NextRequest) {
 
     return Response.json({ success: true, data });
   } catch (err: any) {
-    console.error("API error in POST /api/logo-feedback:", err);
+    logger.error("API error in POST /api/logo-feedback:", err);
     return Response.json({ error: err.message || "Failed to save feedback" }, { status: 500 });
   }
 }
 
 export async function GET(request: NextRequest) {
   try {
-    // Basic verification of admin passcode via headers
-    const authHeader = request.headers.get("x-admin-pin");
-    const adminPin = process.env.ADMIN_PIN || "0408";
-    
-    if (authHeader !== adminPin && authHeader !== "bodiedbyesh") {
-      return Response.json({ error: "Unauthorized access" }, { status: 401 });
+    const { error: authError } = await requireAdminSession(request);
+    if (authError) {
+      return authError;
     }
 
     const supabase = getSupabase();
@@ -127,7 +135,7 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("Supabase error listing logo feedback:", error);
+      logger.error("Supabase error listing logo feedback:", error);
       if (error.code === "42P01") {
         return Response.json({
           error: "Database table 'logo_feedback' does not exist.",
@@ -139,7 +147,7 @@ export async function GET(request: NextRequest) {
 
     return Response.json({ success: true, data });
   } catch (err: any) {
-    console.error("API error in GET /api/logo-feedback:", err);
+    logger.error("API error in GET /api/logo-feedback:", err);
     return Response.json({ error: err.message || "Failed to fetch feedback" }, { status: 500 });
   }
 }

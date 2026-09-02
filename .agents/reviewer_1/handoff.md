@@ -1,77 +1,100 @@
-# Handoff Report: Coastal Community Church (#3266) Code & Architecture Review
+# Review and Adversarial Verification Report: Backend & Ingress Review
 
-**Agent:** Reviewer 1 (Roles: Reviewer, Adversarial Critic)  
-**Milestone:** Coastal Community Church (#3266) Review  
-**Date:** 2026-08-17  
-**Verdict:** **APPROVE**  
+**Reviewer**: teamwork_preview_reviewer (Backend & Ingress Reviewer)
+**Working Directory**: `c:\projects\BodiedbyEsh\.agents\reviewer_1`
+**Verdict**: APPROVE
+**Integrity Status**: CLEAN (Zero integrity violations, zero hardcoded cheat values, genuine business logic)
 
 ---
 
 ## 1. Observation
-1. **Database & RLS (`scratch/coastal_3266_setup.sql`)**:
-   - 9 core tables declared (`groups`, `group_members`, `step_logs`, `community_encouragements`, `encouragement_reactions`, `faith_devotionals`, `devotional_reflections`, `group_milestones`, `user_milestone_unlocks`).
-   - `ALTER TABLE ... ENABLE ROW LEVEL SECURITY;` applied on all 9 tables.
-   - Strict `auth.uid() = user_id` row-level security policies created for user data tables (`step_logs`, `devotional_reflections`, `group_members`, `user_milestone_unlocks`).
-   - 5 `SECURITY DEFINER` stored procedures implemented: `get_group_stats`, `get_group_leaderboard`, `get_user_walking_streak`, `auto_join_group`, `get_daily_devotional`.
-   - Automated trigger `on_step_logged_check_milestones` updates `group_milestones` (`is_reached = true`, `unlocked_at = now()`) when total steps surpass milestone targets.
-   - Initial seed data populates Coastal Community Church (slug: `coastal`, number: `3266`, accent: `#D4B87E`), 6 communal milestones (Jericho 50k to Promised Land 2.5M), and 14 curated "Walking by Faith" daily devotionals.
-2. **TypeScript Domain Models (`src/types/coastal.ts`)**:
-   - Clean type definitions for `WalkingGroup`, `GroupMember`, `StepLog`, `FaithDevotional`, `DevotionalReflection`, `GroupMilestone`, `IndividualMilestone`, `CommunityEncouragement`, `GroupStats`, `LeaderboardEntry`, `UserStreak`, and API DTO payloads.
-3. **Data Access Service Engine (`src/lib/coastal/db.ts`, `devotionals-data.ts`, `milestones-data.ts`)**:
-   - Pure calculation helpers (`calculateMileage`, `calculateActiveMinutes`, `calculateCalories`).
-   - Dynamic integration with Supabase SSR clients on server and browser with graceful offline/local fallbacks.
-   - Individual milestone evaluator (`evaluateIndividualMilestones`) for 11 personal badges.
-   - Communal milestone evaluator (`evaluateCommunalMilestones`) for 6 collective journey stages.
-   - 14-day deterministic devotional rotation engine with day-of-year calculation.
-4. **Next.js App Router Backend API Routes (`src/app/api/coastal/`)**:
-   - `/api/coastal/steps`: GET (logs + streak), POST (bounds validation 0..150k + upsert), DELETE (user-scoped delete).
-   - `/api/coastal/community`: GET (stats, leaderboard, feed), POST (encouragement messages + SVG reactions).
-   - `/api/coastal/devotionals`: GET (daily devotional + private reflections), POST (reflection autosave, max 4k chars).
-   - `/api/coastal/join`: POST (idempotent auto-join to Group #3266).
-5. **Frontend Pages & Components (`src/app/coastal/`, `src/app/coastal-walk/`, `src/components/coastal/`)**:
-   - `/coastal-walk/page.tsx` properly awaits async `searchParams` Promise (Next.js 16 App Router compliance) and redirects to `/coastal` preserving query params.
-   - `/coastal/page.tsx` provides multi-tab navigation (`StepTracker`, `ScriptureCard`, `GroupProgress`, `Leaderboard`, `EncouragementFeed`, `CoastalAuthModal`, `MilestoneModal`) wrapped in `<Suspense>`.
-   - Global navigation in `src/components/Header.tsx` and `src/components/Footer.tsx` includes direct links to `/coastal`.
-6. **Zero-Emoji & SVG Compliance**:
-   - 100% Lucide React SVG iconography. Zero AI or unicode emojis in code, UI copy, or database seeds.
-7. **4-Tier Automated Test Suite (`scripts/run-coastal-tests.mjs`)**:
-   - 99 total test cases (70 Tier 1, 22 Tier 2, 5 Tier 3, 2 Tier 4).
+
+### 1.1 Database Setup & DDL Schema (`scratch/client_intakes_setup.sql`)
+- Lines 7–21 define table `public.client_intakes` with `id UUID DEFAULT gen_random_uuid() PRIMARY KEY`, `track TEXT NOT NULL`, `client_name TEXT NOT NULL`, `client_email TEXT NOT NULL`, `client_phone TEXT`, `intake_data JSONB NOT NULL DEFAULT '{}'::jsonb`, `waiver_signed BOOLEAN NOT NULL DEFAULT false`, `waiver_signature TEXT`, `waiver_signed_at TIMESTAMPTZ`, `status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'reviewed', 'enrolled', 'archived'))`, `coach_notes TEXT`, `created_at TIMESTAMPTZ`, `updated_at TIMESTAMPTZ`.
+- Lines 24–28 establish performant indexes on `track`, `status`, `LOWER(client_email)`, `created_at DESC`, and a GIN index on `intake_data`.
+- Lines 31–47 define the automatic `updated_at` trigger function and trigger `on_client_intakes_update`.
+- Lines 50–83 enable Row Level Security (RLS) with:
+  - Public insert policy (`Allow public insert client intakes`) allowing anonymous client intake submissions.
+  - Admin select, update, and delete policies (`Allow admin read client intakes`, `Allow admin update client intakes`, `Allow admin delete client intakes`) strictly enforcing `(auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'`.
+  - Full access bypass policy for `service_role`.
+
+### 1.2 Validation Schemas (`src/lib/validation/schemas.ts`)
+- Lines 389–403 define `ClientIntakeTrackEnum` supporting `["park-to-peak", "executive-concierge", "nutrition-metabolic", "track_a", "track_b", "track_c"]` and `ClientIntakeStatusEnum` supporting `["new", "reviewed", "enrolled", "archived"]`.
+- Lines 406–464 define Track A schemas (`ParkToPeakIntakeDataSchema` and `ParkToPeakIntakeSchema`) validating cohort selection, PAR-Q+ joint audit, South Florida heat/humidity tolerance, emergency contact info, weather policy acknowledgement, and typed digital signatures.
+- Lines 467–515 define Track B schemas (`ExecutiveConciergeIntakeDataSchema` and `ExecutiveConciergeIntakeSchema`) validating wearable devices array, resting HR (30–200 bpm), HRV (0–300 ms), average sleep hours (1–24), sedentary desk ergonomics (cervical spine, APT, hip flexors, sitting hours), travel cadence, and dynamic recovery waiver.
+- Lines 518–572 define Track C schemas (`NutritionMetabolicIntakeDataSchema` and `NutritionMetabolicIntakeSchema`) validating age (16–120), biological sex, weight (50–800 lbs), height (36–96 in), body fat %, activity multiplier, protein target, dietary restrictions, GI/behavioral triggers, and AI scanner consents.
+- Lines 575–584 define `ClientIntakeSubmissionSchema` for `POST /api/intake`.
+- Lines 587–609 define `AdminIntakeQuerySchema` and `AdminIntakePatchSchema` for administrative search, pagination, and status/notes mutation.
+
+### 1.3 Ingress API Endpoint (`src/app/api/intake/route.ts`)
+- **Rate Limiting**: Lines 50–57 execute `checkRateLimit(request, "form")`. If rate limit is breached, returns `rateLimitResponse(rateLimit)` with HTTP status 429 and RFC headers (`Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`).
+- **Zod Runtime Validation**: Lines 60–64 execute `validateRequestBody(request, ClientIntakeSubmissionSchema)`. Invalid payloads return structured 400 Bad Request with field issue paths.
+- **Supabase Persistence**: Lines 90–128 initialize Supabase client via `getSupabaseClient()` and insert records into `client_intakes` with JSONB `intake_data`, status `'new'`, and digital signatures. If Supabase is unavailable in local development, it catches exceptions and proceeds safely with a fallback record identifier.
+- **CRM Integration**: Lines 130–142 upsert contacts into GoHighLevel via `container.crmService.createOrUpdateContact` with tags `["client-intake", "track:<track>", "status:new"]`.
+- **Notification Pipelines**: Lines 144–253 dispatch emails and SMS alerts to Coach Esh (`COACH_NOTIFICATION_EMAIL` and `COACH_NOTIFICATION_PHONE`) and send a branded confirmation email to the client.
+- **Admin Session Gate (`GET` & `PATCH`)**: Lines 274–277 and 353–356 call `requireAdminSession(request)`. Requests lacking a valid session or the `admin` role in `app_metadata` return HTTP 401 or HTTP 403.
+- **Admin Query & Mutation**: Lines 294–337 implement parameterized search, filtering by track and status, and range pagination. Lines 373–401 implement PATCH updates for `status` and `coach_notes`.
+- **PII Redaction & Secrets**: Uses `maskEmail`, `maskName`, `maskPhone`, and `sanitizeMeta` from `src/lib/logger.ts`. Zero hardcoded API keys or secret tokens are present in the source files.
 
 ---
 
 ## 2. Logic Chain
-1. *Observation 1 & 2* establish that the database schema and TypeScript domain models completely satisfy requirements R1–R4 from `ORIGINAL_REQUEST.md`.
-2. *Observation 1* establishes that Row Level Security (RLS) and SECURITY DEFINER RPCs isolate individual private logs while safely aggregating group statistics and providing privacy-preserving leaderboard masking for anonymous walkers.
-3. *Observation 3 & 4* show that the backend service layer and API routes validate bounds, enforce auth checks, and gracefully degrade if Supabase is offline.
-4. *Observation 5 & 6* demonstrate that the frontend user interface provides full responsive support, adheres strictly to the zero-emoji rule, and is fully integrated with global navigation.
-5. *Observation 7* confirms that all 31 features (F01–F31), edge cases (leap day, 0-step, 150k max steps, year transition, XSS/SQLi safety), pairwise interactions, and large-scale workload simulations (50 concurrent walkers, 14-day discipleship journey) are systematically tested.
-6. Therefore, the implementation is structurally sound, secure, compliant, and ready for production.
+
+1. **Ingress Protection**: In `src/app/api/intake/route.ts`, incoming requests hit the sliding-window rate limiter before any JSON parsing or database operations occur. Because `checkRateLimit(request, "form")` uses an in-memory sliding window bucket (5 requests/min per IP), excessive automated requests are throttled at the perimeter with RFC 429 responses.
+2. **Type Safety & Data Integrity**: `validateRequestBody` safely parses the request body against `ClientIntakeSubmissionSchema`. Any invalid field types, missing signatures, or out-of-range values are intercepted immediately and return HTTP 400 with structured issue arrays, preventing malformed data from ever reaching the database.
+3. **Persistence & Portability**: The Supabase client persists full intake data into PostgreSQL `client_intakes` using JSONB `intake_data`. Because the table schema is indexed with GIN on `intake_data` and B-Trees on `track`, `status`, `LOWER(client_email)`, and `created_at DESC`, queries in the Admin Portal remain fast and scalable.
+4. **Administrative Security**: `requireAdminSession` queries Supabase Auth via `supabase.auth.getUser()` and verifies `user.app_metadata?.role === 'admin'`. Anonymous users receive HTTP 401 Unauthorized; authenticated non-admin users receive HTTP 403 Forbidden.
+5. **Privacy & Operational Telemetry**: Logging calls utilize `maskEmail`, `maskName`, and `maskPhone`, ensuring client PII is redacted from production standard output while maintaining searchable debug traces.
 
 ---
 
 ## 3. Caveats
-- Database migration script (`scratch/coastal_3266_setup.sql`) must be applied to the target Supabase PostgreSQL instance in the staging/production environment before live users authenticate against the remote database. (The service layer includes complete offline/local fallbacks in the interim).
-- External SpeechSynthesis API in `ScriptureCard.tsx` depends on browser Web Speech API support, which gracefully degrades to silent text mode in unsupported browsers.
+
+- Live outbound email/SMS delivery depends on production environment variables (`RESEND_API_KEY`, `TWILIO_AUTH_TOKEN`, `GHL_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`). In local or CI test environments where credentials are not provisioned, the Hexagonal Architecture container gracefully uses mock adapters.
+- Supabase table creation script `scratch/client_intakes_setup.sql` must be executed in the target Supabase project's SQL editor to initialize tables and RLS policies in newly deployed environments.
 
 ---
 
 ## 4. Conclusion
-**Verdict: APPROVE**  
-The Coastal Community Church (#3266) Faith & Fitness Walking and Step Tracker is fully implemented, verified, secure, and compliant with all project requirements and constraints. No integrity violations or blocking issues were found.
+
+The implementation of `scratch/client_intakes_setup.sql`, `src/lib/validation/schemas.ts`, and `src/app/api/intake/route.ts` fully satisfies all architectural, security, and functional requirements:
+- Rate limiting correctly enforces the 5 req/min policy returning RFC 429.
+- Zod schemas correctly validate all Track A, Track B, and Track C clinical domains and return structured 400 Bad Request responses on violations.
+- Supabase persistence logic handles JSONB data, idempotent schema setup, and robust RLS policies.
+- Admin authentication strictly gates GET and PATCH endpoints via `requireAdminSession(request)`.
+- Logging conforms to zero-PII leakage standards with complete masking.
+- Zero integrity violations or facade bypasses were detected.
+
+**Final Verdict**: APPROVE.
 
 ---
 
 ## 5. Verification Method
-To independently verify the test suite and production build:
-1. **Automated 4-Tier Test Runner**:
+
+To independently verify all claims:
+
+1. **Verify Clinical Intake 4-Tier Test Suite**:
    ```bash
-   node scripts/run-coastal-tests.mjs
+   node scripts/run-intake-tests.mjs
    ```
-   *Expected result: 99/99 tests pass (100% compliance across Tier 1 through Tier 4).*
-2. **Next.js Production Compilation**:
+   *Expected Result*: 100% Pass Rate across all 4 tiers (50 Feature tests, 50 Boundary tests, 5 Integration pipelines, 6 Real-world scenarios, and Static AST scan).
+
+2. **Verify Master PRR Audit Suite**:
    ```bash
-   npm run build
+   node scripts/run-prr-audit-suite.mjs
    ```
-   *Expected result: Successful compilation with 0 TypeScript errors and 0 route generation errors.*
-3. **Database Migration Inspection**:
-   Inspect `scratch/coastal_3266_setup.sql` to verify DDL, RLS policies, RPCs, and seed data.
+   *Expected Result*: Score 100/100 PRR points, 0 failures.
+
+3. **Verify TypeScript Strict Compilation**:
+   ```bash
+   npx.cmd tsc --noEmit
+   ```
+   *Expected Result*: 0 type errors.
+
+4. **Inspect Source Files**:
+   - `scratch/client_intakes_setup.sql`
+   - `src/lib/validation/schemas.ts`
+   - `src/app/api/intake/route.ts`
+   - `src/lib/rate-limit.ts`
+   - `src/lib/auth/admin.ts`
+   - `src/lib/logger.ts`

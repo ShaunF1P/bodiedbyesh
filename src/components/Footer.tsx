@@ -46,7 +46,7 @@ export default function Footer() {
               </svg>
             </a>
             <a
-              href="https://tiktok.com/@Bodiedby_Esh"
+              href="https://www.tiktok.com/@bodiedby_esh"
               target="_blank"
               rel="noopener noreferrer"
               className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-silver-slate hover:text-accent-lime hover:border-accent-lime/30 hover:bg-accent-lime/5 transition-all duration-300"

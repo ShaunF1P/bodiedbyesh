@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  // ── Case-Insensitive Routing Redirect ─────────────────────────────────────
+  // ── 1. Case-Insensitive Routing Canonicalization ──────────────────────────
   // Redirect requests with uppercase path letters to their lowercase equivalents
   // Excludes _next internal paths, api endpoints, and files with extensions
   if (
@@ -37,7 +37,7 @@ export async function middleware(request: NextRequest) {
         return request.cookies.getAll();
       },
       setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) =>
+        cookiesToSet.forEach(({ name, value }) =>
           request.cookies.set(name, value)
         );
         response = NextResponse.next({
@@ -54,7 +54,28 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Protect /dashboard route
+  // ── 2. Intercept /admin, /admin/*, and /logo-review/admin ───────────────────
+  if (pathname.startsWith("/admin") || pathname.startsWith("/logo-review/admin")) {
+    if (!user) {
+      // Unauthenticated -> redirect to /login with redirectTo parameter
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.searchParams.set("redirectTo", pathname);
+      return NextResponse.redirect(url);
+    }
+
+    const userRole = user.app_metadata?.role as string | undefined;
+
+    if (userRole !== "admin") {
+      // Unauthorized non-admin user -> redirect to /dashboard
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard";
+      url.searchParams.set("error", "unauthorized_admin_access");
+      return NextResponse.redirect(url);
+    }
+  }
+
+  // ── 3. Intercept /dashboard Routes ─────────────────────────────────────────
   if (pathname.startsWith("/dashboard")) {
     if (!user) {
       // Not logged in -> redirect to /login
@@ -62,7 +83,7 @@ export async function middleware(request: NextRequest) {
       url.pathname = "/login";
       return NextResponse.redirect(url);
     }
-    
+
     // Check if email is verified
     if (!user.email_confirmed_at) {
       const url = request.nextUrl.clone();
@@ -72,10 +93,19 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // If visiting /login and already logged in and verified, redirect to /dashboard
+  // ── 4. Redirect Authenticated Users Away from /login ───────────────────────
   if (pathname.startsWith("/login") && user && user.email_confirmed_at) {
+    const redirectTo = request.nextUrl.searchParams.get("redirectTo");
+    const userRole = user.app_metadata?.role as string | undefined;
+
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    if (redirectTo && redirectTo.startsWith("/admin") && userRole === "admin") {
+      url.pathname = redirectTo;
+      url.search = "";
+    } else {
+      url.pathname = "/dashboard";
+      url.search = "";
+    }
     return NextResponse.redirect(url);
   }
 

@@ -1,8 +1,10 @@
 import { NextRequest } from "next/server";
-import { ghl } from "@/lib/ghl";
 import { createClient } from "@supabase/supabase-js";
-import { sendEmail } from "@/lib/mail";
-import { sendSMS } from "@/lib/sms";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { logger, maskEmail, maskName } from "@/lib/logger";
+import { validateRequestBody } from "@/lib/validation/api-validator";
+import { GHLContactLeadSchema } from "@/lib/validation/schemas";
+import { container } from "@/lib/container";
 
 /**
  * POST /api/ghl-contact
@@ -13,23 +15,19 @@ import { sendSMS } from "@/lib/sms";
  * Body: { name, email, phone, programChoice, trackGoal, source }
  */
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { name, email, phone, programChoice, trackGoal, source } = body;
+  // ── Rate Limiting (5 requests/minute per IP) ──────────────────────────
+  const rateLimit = checkRateLimit(request, "form");
+  if (!rateLimit.success) {
+    return rateLimitResponse(rateLimit);
+  }
 
-    // ── Validate required fields ──────────────────────────────────────────
-    if (!email || typeof email !== "string") {
-      return Response.json(
-        { error: "email is required" },
-        { status: 400 }
-      );
-    }
-    if (!name || typeof name !== "string") {
-      return Response.json(
-        { error: "name is required" },
-        { status: 400 }
-      );
-    }
+  const validation = await validateRequestBody(request, GHLContactLeadSchema);
+  if (!validation.success) {
+    return validation.response;
+  }
+
+  try {
+    const { name, email, phone, programChoice, trackGoal, source } = validation.data;
 
     // ── Save Lead to Supabase (Internal Backup Pipeline) ──────────────────
     let leadId: string | undefined;
@@ -54,24 +52,24 @@ export async function POST(request: NextRequest) {
           .single();
 
         if (error) {
-          console.error("[ghl-contact] Supabase lead insertion error:", error);
+          logger.error("[ghl-contact] Supabase lead insertion error:", error);
         } else if (data) {
           leadId = data.id;
-          console.log(`[ghl-contact] Lead saved to Supabase with ID: ${leadId}`);
+          logger.info(`[ghl-contact] Lead saved to Supabase with ID: ${leadId}`);
         }
       } else {
-        console.warn("[ghl-contact] Supabase credentials missing. Skipping DB save.");
+        logger.warn("[ghl-contact] Supabase credentials missing. Skipping DB save.");
       }
     } catch (dbErr) {
-      console.error("[ghl-contact] Supabase DB exception:", dbErr);
+      logger.error("[ghl-contact] Supabase DB exception:", dbErr);
     }
 
-    // ── Send notifications to Coach Esh ────────────────────────────────────
+    // ── Send notifications to Coach Esh via Communication Service Port ───
     try {
       const adminEmail = process.env.COACH_NOTIFICATION_EMAIL || "BodiedByEsh@gmail.com";
       const adminPhone = process.env.COACH_NOTIFICATION_PHONE || "+17728774231";
       
-      const notificationSubject = `New Website Signup: ${name}`;
+      const notificationSubject = `New Website Signup: ${maskName(name)}`;
       const notificationHtml = `
         <div style="font-family: sans-serif; background-color: #080A0E; color: #f8fafc; padding: 40px; border-radius: 16px; border: 1px solid #1e293b; max-width: 600px; margin: auto;">
           <h2 style="color: #c5f82a; font-size: 20px; font-weight: bold; margin-bottom: 16px;">New Lead Alert</h2>
@@ -92,7 +90,7 @@ export async function POST(request: NextRequest) {
         </div>
       `;
 
-      await sendEmail({
+      await container.communicationService.sendEmail({
         to: adminEmail,
         subject: notificationSubject,
         html: notificationHtml,
@@ -107,12 +105,12 @@ export async function POST(request: NextRequest) {
           ? "Client Portal Access"
           : programChoice || "Coaching Program";
 
-      await sendSMS({
+      await container.communicationService.sendSMS({
         to: adminPhone,
         body: `Bodied by Esh Lead: ${name} is inquiring about ${programName}.`,
       });
     } catch (notifyErr) {
-      console.error("[ghl-contact] Failed to trigger email/SMS notifications:", notifyErr);
+      logger.error("[ghl-contact] Failed to trigger email/SMS notifications:", notifyErr);
     }
 
     // ── Build tags for GHL ────────────────────────────────────────────────
@@ -121,7 +119,7 @@ export async function POST(request: NextRequest) {
     if (trackGoal) tags.push(trackGoal);
     if (source) tags.push(`source:${source}`);
 
-    // ── Upsert contact in GHL ─────────────────────────────────────────────
+    // ── Upsert contact in GHL via CRM Service Port ────────────────────────
     let contactId: string | undefined;
     let opportunityId: string | undefined;
 
@@ -129,39 +127,39 @@ export async function POST(request: NextRequest) {
       // Check if GHL is using placeholders
       const apiKey = process.env.GHL_API_KEY;
       if (!apiKey || apiKey.includes("placeholder")) {
-        console.warn("[GHL] GHL_API_KEY is a placeholder — skipping GHL integration (relying on Supabase).");
+        logger.warn("[GHL] GHL_API_KEY is a placeholder — skipping GHL integration (relying on Supabase).");
       } else {
-        const contact = await ghl.createOrUpdateContact({
+        const contact = await container.crmService.createOrUpdateContact({
           email,
           name,
-          phone,
+          phone: phone || undefined,
           tags,
         });
 
         contactId = contact.id;
-        console.log(`[GHL] Contact upserted: ${contact.id} (${email})`);
+        logger.info(`[GHL] Contact upserted: ${contact.id} (${maskEmail(email)})`);
 
         // ── Create opportunity in coaching pipeline ───────────────────────────
         const pipelineId = process.env.GHL_PIPELINE_ID;
         const stageId = process.env.GHL_STAGE_NEW_LEAD;
 
         if (pipelineId && stageId && !pipelineId.includes("placeholder") && !stageId.includes("placeholder")) {
-          const opportunity = await ghl.createOpportunity({
+          const opportunity = await container.crmService.createOpportunity({
             contactId: contact.id,
             pipelineId,
             stageId,
             name: `${name} — ${programChoice || "General Inquiry"}`,
           });
           opportunityId = opportunity.id;
-          console.log(`[GHL] Opportunity created: ${opportunity.id}`);
+          logger.info(`[GHL] Opportunity created: ${opportunity.id}`);
         } else {
-          console.warn(
+          logger.warn(
             "[GHL] GHL_PIPELINE_ID or GHL_STAGE_NEW_LEAD not fully configured — skipping opportunity creation."
           );
         }
       }
     } catch (ghlErr) {
-      console.error("[ghl-contact] GHL integration failed, continuing with fallback:", ghlErr);
+      logger.error("[ghl-contact] GHL integration failed, continuing with fallback:", ghlErr);
     }
 
     return Response.json({
@@ -171,12 +169,10 @@ export async function POST(request: NextRequest) {
       leadId: leadId || null,
     });
   } catch (err) {
-    console.error("[ghl-contact] Major exception:", err);
-    // Even on major exceptions, try to be resilient so checkout flow doesn't crash completely
+    logger.error("[ghl-contact] Major exception:", err);
     return Response.json(
       { error: "Failed to process lead fully, but checkout flow is active", success: true },
       { status: 200 }
     );
   }
 }
-

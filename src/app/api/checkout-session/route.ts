@@ -1,5 +1,9 @@
 import { NextRequest } from "next/server";
-import { getStripe } from "@/lib/stripe";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
+import { validateQueryParams } from "@/lib/validation/api-validator";
+import { CheckoutSessionGetQuerySchema } from "@/lib/validation/schemas";
+import { container } from "@/lib/container";
 
 /**
  * GET /api/checkout-session?id=cs_xxx
@@ -8,38 +12,27 @@ import { getStripe } from "@/lib/stripe";
  * display order confirmation details.
  */
 export async function GET(request: NextRequest) {
+  // ── Rate Limiting (10 requests/minute per IP) ──────────────────────────
+  const rateLimit = checkRateLimit(request, "checkout");
+  if (!rateLimit.success) {
+    return rateLimitResponse(rateLimit);
+  }
+
+  const queryValidation = validateQueryParams(
+    request.nextUrl.searchParams,
+    CheckoutSessionGetQuerySchema
+  );
+  if (!queryValidation.success) {
+    return queryValidation.response;
+  }
+
   try {
-    const sessionId = new URL(request.url).searchParams.get("id");
+    const { id: sessionId } = queryValidation.data;
+    const sessionData = await container.paymentService.retrieveSession(sessionId);
 
-    if (!sessionId) {
-      return Response.json(
-        { error: "Missing session id query parameter" },
-        { status: 400 }
-      );
-    }
-
-    // ── Mock response when Stripe is not configured ─────────────────────
-    const stripe = await getStripe();
-    if (!stripe) {
-      return Response.json({
-        customerEmail: "preview@bodiedbyesh.com",
-        amountTotal: 0,
-        programName: "Preview Mode",
-        status: "complete",
-      });
-    }
-
-    // ── Retrieve real session from Stripe ───────────────────────────────
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
-
-    return Response.json({
-      customerEmail: session.customer_email ?? session.customer_details?.email ?? null,
-      amountTotal: session.amount_total,
-      programName: session.metadata?.programChoice ?? null,
-      status: session.status,
-    });
+    return Response.json(sessionData);
   } catch (err) {
-    console.error("[checkout-session] Error:", err);
+    logger.error("[checkout-session] Error:", err);
     return Response.json(
       { error: "Failed to retrieve session" },
       { status: 500 }

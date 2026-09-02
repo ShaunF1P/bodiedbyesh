@@ -33,6 +33,14 @@ import {
 import { SupabaseClient } from "@supabase/supabase-js";
 
 // Calculation Utilities
+export function getLocalISODate(d: Date = new Date()): string {
+  const dateObj = d instanceof Date ? d : new Date(d);
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const day = String(dateObj.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function calculateMileage(steps: number): number {
   if (!steps || steps <= 0) return 0;
   // Standard cadence: 2,000 steps per mile
@@ -71,97 +79,20 @@ const DEFAULT_GROUP: WalkingGroup = {
 
 const INITIAL_COMMUNITY_FEED: CommunityEncouragement[] = [
   {
-    id: "enc-1",
+    id: "enc-welcome",
     group_id: "3266-coastal-church",
-    user_id: "user-pastor-mark",
-    display_name: "Pastor Mark",
-    message: "Blessed Sunday family! Remember that every step today is an act of stewardship for the temple God gave you. Let's hit our 50k milestone this week!",
+    user_id: "system-welcome",
+    display_name: "Coastal Community Church",
+    message:
+      "Welcome to Coastal Community Church (#3266) Faith & Fitness Walking Portal! Log your daily walks, read today's devotional, and share your prayers and praise reports here with the fellowship.",
     prayer_tag: "Praise & Encouragement",
-    reactions: { prayer: 14, heart: 9, fire: 12, crown: 5 },
-    user_reactions: ["prayer", "fire"],
-    created_at: new Date(Date.now() - 3600000 * 4).toISOString(),
-  },
-  {
-    id: "enc-2",
-    group_id: "3266-coastal-church",
-    user_id: "user-sarah-m",
-    display_name: "Sarah M.",
-    message: "Just completed a 4-mile sunrise prayer walk by the coastline. Praying for all our families walking through tough seasons right now. Keep moving forward!",
-    prayer_tag: "Prayer Request",
-    reactions: { prayer: 19, heart: 11, fire: 8, crown: 3 },
-    user_reactions: ["heart"],
-    created_at: new Date(Date.now() - 3600000 * 8).toISOString(),
-  },
-  {
-    id: "enc-3",
-    group_id: "3266-coastal-church",
-    user_id: "user-david-k",
-    display_name: "David K.",
-    message: "Hit 10,000 steps 5 days in a row! Never felt more energized for morning prayer and worship. Let's keep spurring one another on!",
-    prayer_tag: "Milestone Shoutout",
-    reactions: { prayer: 8, heart: 6, fire: 15, crown: 4 },
-    user_reactions: ["fire"],
-    created_at: new Date(Date.now() - 3600000 * 18).toISOString(),
+    reactions: { prayer: 0, heart: 0, fire: 0, crown: 0 },
+    user_reactions: [],
+    created_at: "2026-08-17T00:00:00.000Z",
   },
 ];
 
-const INITIAL_LEADERBOARD: LeaderboardEntry[] = [
-  {
-    rank: 1,
-    user_id: "leader-1",
-    display_name: "Marcus Vance",
-    campus: "Main Campus",
-    is_anonymous: false,
-    total_steps: 84200,
-    total_miles: 42.1,
-    active_days: 7,
-    streak_days: 7,
-  },
-  {
-    rank: 2,
-    user_id: "leader-2",
-    display_name: "Faithful Walker #401",
-    campus: "North Campus",
-    is_anonymous: true,
-    total_steps: 71500,
-    total_miles: 35.75,
-    active_days: 7,
-    streak_days: 7,
-  },
-  {
-    rank: 3,
-    user_id: "leader-3",
-    display_name: "Elena Rostova",
-    campus: "Main Campus",
-    is_anonymous: false,
-    total_steps: 64800,
-    total_miles: 32.4,
-    active_days: 6,
-    streak_days: 6,
-  },
-  {
-    rank: 4,
-    user_id: "leader-4",
-    display_name: "Deacon James",
-    campus: "South Campus",
-    is_anonymous: false,
-    total_steps: 53200,
-    total_miles: 26.6,
-    active_days: 6,
-    streak_days: 6,
-  },
-  {
-    rank: 5,
-    user_id: "leader-5",
-    display_name: "Hannah Grace",
-    campus: "Main Campus",
-    is_anonymous: false,
-    total_steps: 48900,
-    total_miles: 24.45,
-    active_days: 5,
-    streak_days: 5,
-  },
-];
+const INITIAL_LEADERBOARD: LeaderboardEntry[] = [];
 
 // Helper to create client instance if not provided
 async function getSupabaseClient(providedClient?: SupabaseClient): Promise<SupabaseClient | null> {
@@ -251,12 +182,12 @@ export async function getGroupStats(
   groupId?: string,
   client?: SupabaseClient
 ): Promise<GroupStats> {
-  let totalSteps = 328450;
-  let totalMiles = 164.22;
-  let totalMinutes = 3284;
-  let activeMembersCount = 28;
-  let totalMembers = 42;
-  let totalEncouragements = 16;
+  let totalSteps = 0;
+  let totalMiles = 0;
+  let totalMinutes = 0;
+  let activeMembersCount = 0;
+  let totalMembers = 0;
+  let totalEncouragements = 0;
 
   try {
     const supabase = await getSupabaseClient(client);
@@ -407,10 +338,10 @@ export async function getUserStreak(
   }
 
   return {
-    current_streak: 3,
-    longest_streak: 7,
-    total_days_logged: 5,
-    last_log_date: new Date().toISOString().split("T")[0],
+    current_streak: 0,
+    longest_streak: 0,
+    total_days_logged: 0,
+    last_log_date: null,
   };
 }
 
@@ -507,24 +438,7 @@ export async function getStepLogs(
     console.warn("Error fetching step logs from Supabase:", err);
   }
 
-  // Local fallback history if offline
-  const todayStr = new Date().toISOString().split("T")[0];
-  return [
-    {
-      id: "log-today",
-      user_id: userId,
-      group_id: groupId || DEFAULT_GROUP.id,
-      log_date: todayStr,
-      steps: 8420,
-      distance_miles: 4.21,
-      active_minutes: 84,
-      calories_burned: 337,
-      source: "manual",
-      notes: "Morning devotional walk through the neighborhood.",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ];
+  return [];
 }
 
 /**
@@ -538,20 +452,22 @@ export async function logSteps(
     steps: number;
     distanceMiles?: number;
     activeMinutes?: number;
+    source?: string;
     notes?: string;
   },
   client?: SupabaseClient
 ): Promise<{ success: boolean; log?: StepLog; error?: string }> {
-  const { userId, logDate, steps } = payload;
+  const { userId, logDate, steps, source, notes } = payload;
   if (!userId) return { success: false, error: "User ID is required" };
-  if (steps < 0 || steps > 150000) {
-    return { success: false, error: "Step count must be between 0 and 150,000" };
+  if (steps < 0 || steps > 200000) {
+    return { success: false, error: "Step count must be between 0 and 200,000" };
   }
 
   const groupId = payload.groupId || DEFAULT_GROUP.id;
   const distanceMiles = payload.distanceMiles ?? calculateMileage(steps);
   const activeMinutes = payload.activeMinutes ?? calculateActiveMinutes(steps);
   const caloriesBurned = calculateCalories(steps);
+  const resolvedSource = (source || "manual") as any;
 
   try {
     const supabase = await getSupabaseClient(client);
@@ -567,7 +483,8 @@ export async function logSteps(
             distance_miles: distanceMiles,
             active_minutes: activeMinutes,
             calories_burned: caloriesBurned,
-            notes: payload.notes || null,
+            source: resolvedSource,
+            notes: notes || null,
             updated_at: new Date().toISOString(),
           },
           { onConflict: "user_id,group_id,log_date" }
@@ -587,7 +504,7 @@ export async function logSteps(
             distance_miles: Number(data.distance_miles),
             active_minutes: data.active_minutes,
             calories_burned: data.calories_burned,
-            source: data.source,
+            source: data.source || resolvedSource,
             notes: data.notes,
             created_at: data.created_at,
             updated_at: data.updated_at,
@@ -609,8 +526,8 @@ export async function logSteps(
     distance_miles: distanceMiles,
     active_minutes: activeMinutes,
     calories_burned: caloriesBurned,
-    source: "manual",
-    notes: payload.notes || null,
+    source: resolvedSource,
+    notes: notes || null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };

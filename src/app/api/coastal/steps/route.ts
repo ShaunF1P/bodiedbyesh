@@ -1,58 +1,56 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { getStepLogs, logSteps, deleteStepLog, getUserStreak } from "@/lib/coastal/db";
-
-async function getAuthUser(request: NextRequest) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) return null;
-
-  try {
-    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll() {
-          // No-op in route handler
-        },
-      },
-    });
-
-    const { data: { user } } = await supabase.auth.getUser();
-    return user ? { user, supabase } : null;
-  } catch {
-    return null;
-  }
-}
+import { getStepLogs, logSteps, deleteStepLog, getUserStreak, getLocalISODate } from "@/lib/coastal/db";
+import { requireUserSession } from "@/lib/auth/user";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
+import { validateRequestBody, validateQueryParams } from "@/lib/validation/api-validator";
+import {
+  CoastalStepsQuerySchema,
+  CoastalStepsLogSchema,
+  CoastalStepsDeleteQuerySchema,
+} from "@/lib/validation/schemas";
 
 /**
  * GET /api/coastal/steps
  * Fetch step logs and streak for authenticated user
  */
 export async function GET(request: NextRequest) {
+  // ── Strict Session Authentication (Anti-Spoofing) ─────────────────────
+  const { user, error: authError, supabase } = await requireUserSession(request);
+  if (authError || !user) {
+    return authError || NextResponse.json(
+      { success: false, error: "Unauthorized: Active user session required" },
+      { status: 401 }
+    );
+  }
+
+  const queryValidation = validateQueryParams(
+    request.nextUrl.searchParams,
+    CoastalStepsQuerySchema
+  );
+  if (!queryValidation.success) {
+    return queryValidation.response;
+  }
+
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const startDate = searchParams.get("startDate") || undefined;
-    const endDate = searchParams.get("endDate") || undefined;
-    const groupId = searchParams.get("groupId") || undefined;
+    const { startDate, endDate, groupId } = queryValidation.data;
 
-    const auth = await getAuthUser(request);
-    const userId = auth?.user?.id || searchParams.get("userId") || "guest-user";
+    // Derive userId strictly from authenticated session
+    const userId = user.id;
 
-    const logs = await getStepLogs(userId, groupId, startDate, endDate, auth?.supabase);
-    const streak = await getUserStreak(userId, groupId, auth?.supabase);
+    const logs = await getStepLogs(userId, groupId, startDate, endDate, supabase ?? undefined);
+    const streak = await getUserStreak(userId, groupId, supabase ?? undefined);
 
     return NextResponse.json({
       success: true,
       data: {
         logs,
         streak,
-        isAuthenticated: !!auth?.user,
+        isAuthenticated: true,
       },
     });
   } catch (error: any) {
+    logger.error("Failed to fetch step logs:", error);
     return NextResponse.json(
       { success: false, error: error.message || "Failed to fetch step logs" },
       { status: 500 }
@@ -65,27 +63,33 @@ export async function GET(request: NextRequest) {
  * Log or update daily steps
  */
 export async function POST(request: NextRequest) {
+  // ── Rate Limiting (30 requests/minute per IP) ──────────────────────────
+  const rateLimit = checkRateLimit(request, "auth");
+  if (!rateLimit.success) {
+    return rateLimitResponse(rateLimit);
+  }
+
+  // ── Strict Session Authentication (Anti-Spoofing) ─────────────────────
+  const { user, error: authError, supabase } = await requireUserSession(request);
+  if (authError || !user) {
+    return authError || NextResponse.json(
+      { success: false, error: "Unauthorized: Active user session required" },
+      { status: 401 }
+    );
+  }
+
+  const validation = await validateRequestBody(request, CoastalStepsLogSchema);
+  if (!validation.success) {
+    return validation.response;
+  }
+
   try {
-    const body = await request.json();
-    const { steps, logDate, distanceMiles, activeMinutes, notes, groupId } = body;
+    const { steps, logDate, distanceMiles, activeMinutes, notes, groupId } = validation.data;
 
-    if (steps === undefined || steps === null || typeof steps !== "number") {
-      return NextResponse.json(
-        { success: false, error: "Numeric steps count is required" },
-        { status: 400 }
-      );
-    }
-
-    if (steps < 0 || steps > 150000) {
-      return NextResponse.json(
-        { success: false, error: "Step count must be between 0 and 150,000" },
-        { status: 400 }
-      );
-    }
-
-    const auth = await getAuthUser(request);
-    const userId = auth?.user?.id || body.userId || "guest-user";
-    const resolvedDate = logDate || new Date().toISOString().split("T")[0];
+    // Maximum allowed daily step count boundary (150000 to 200000 steps)
+    // Derive userId exclusively from authenticated user
+    const userId = user.id;
+    const resolvedDate = logDate || getLocalISODate();
 
     const result = await logSteps(
       {
@@ -97,7 +101,7 @@ export async function POST(request: NextRequest) {
         activeMinutes,
         notes,
       },
-      auth?.supabase
+      supabase ?? undefined
     );
 
     if (!result.success) {
@@ -107,7 +111,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const streak = await getUserStreak(userId, groupId, auth?.supabase);
+    const streak = await getUserStreak(userId, groupId, supabase ?? undefined);
+
+    logger.info(`[coastal-steps] Logged ${steps} steps for user ${userId.slice(0, 8)}*** on ${resolvedDate}`);
 
     return NextResponse.json({
       success: true,
@@ -117,6 +123,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error: any) {
+    logger.error("Internal step logging error:", error);
     return NextResponse.json(
       { success: false, error: error.message || "Internal server error" },
       { status: 500 }
@@ -126,24 +133,49 @@ export async function POST(request: NextRequest) {
 
 /**
  * DELETE /api/coastal/steps
- * Delete a step log entry
+ * Delete a step log entry (with ownership verification)
  */
 export async function DELETE(request: NextRequest) {
-  try {
-    const searchParams = request.nextUrl.searchParams;
-    const id = searchParams.get("id");
+  // ── Strict Session Authentication (Anti-Spoofing) ─────────────────────
+  const { user, error: authError, supabase } = await requireUserSession(request);
+  if (authError || !user) {
+    return authError || NextResponse.json(
+      { success: false, error: "Unauthorized: Active user session required" },
+      { status: 401 }
+    );
+  }
 
-    if (!id) {
-      return NextResponse.json(
-        { success: false, error: "Step log ID is required" },
-        { status: 400 }
-      );
+  const queryValidation = validateQueryParams(
+    request.nextUrl.searchParams,
+    CoastalStepsDeleteQuerySchema
+  );
+  if (!queryValidation.success) {
+    return queryValidation.response;
+  }
+
+  try {
+    const { id } = queryValidation.data;
+    const userId = user.id;
+
+    // Verify ownership before deletion if Supabase client is connected
+    if (supabase) {
+      const { data: existingLog, error: queryError } = await supabase
+        .from("step_logs")
+        .select("user_id")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (queryError) {
+        logger.error("Error querying step log ownership:", queryError);
+      } else if (existingLog && existingLog.user_id !== userId) {
+        return NextResponse.json(
+          { success: false, error: "Forbidden: Not your step log" },
+          { status: 403 }
+        );
+      }
     }
 
-    const auth = await getAuthUser(request);
-    const userId = auth?.user?.id || searchParams.get("userId") || "guest-user";
-
-    const result = await deleteStepLog(id, userId, auth?.supabase);
+    const result = await deleteStepLog(id, userId, supabase ?? undefined);
 
     if (!result.success) {
       return NextResponse.json(
@@ -152,8 +184,11 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    logger.info(`[coastal-steps] Deleted step log ${id} for user ${userId.slice(0, 8)}***`);
+
     return NextResponse.json({ success: true, message: "Log deleted successfully" });
   } catch (error: any) {
+    logger.error("Failed to delete step log:", error);
     return NextResponse.json(
       { success: false, error: error.message || "Failed to delete step log" },
       { status: 500 }

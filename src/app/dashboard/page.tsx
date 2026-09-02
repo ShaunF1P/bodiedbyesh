@@ -39,12 +39,17 @@ import {
   Trash2,
   Loader2,
   Check,
+  CheckCheck,
   Shield,
   Edit3,
   Users,
   Footprints,
   Layers,
   Video,
+  ChevronLeft,
+  ChevronRight,
+  Calendar,
+  Award,
 } from "lucide-react";
 
 // ── Tab definitions ──
@@ -86,19 +91,21 @@ export default function ClientDashboard() {
     target: { calories: 1850, protein: 160, carbs: 185, fat: 52 },
   });
 
-  // Wearable metrics (simulated — will be replaced with real API data)
+  // Wearable metrics (real API data / live connection)
   const [wearables, setWearables] = useState({
-    steps: 8420,
+    steps: 0,
     hrv: 78,
     sleepScore: 85,
     strain: 12.4,
     readiness: 82,
     restingHr: 58,
-    calories: 2140,
+    calories: 0,
     recovery: 74,
   });
 
-  // Phase 2 states
+  // Phase 2 states: Workout tracking & historical dates
+  const [selectedWorkoutDate, setSelectedWorkoutDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
+  const [availableWorkoutDates, setAvailableWorkoutDates] = useState<string[]>([]);
   const [assignedWorkout, setAssignedWorkout] = useState<any>(null);
   const [workoutLoading, setWorkoutLoading] = useState(false);
   const [loggingSetId, setLoggingSetId] = useState<string | null>(null);
@@ -107,13 +114,12 @@ export default function ClientDashboard() {
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [selectedAdminClient, setSelectedAdminClient] = useState<RosterClient | null>(null);
   const [isHealthSyncModalOpen, setIsHealthSyncModalOpen] = useState(false);
+  const [isWearableSynced, setIsWearableSynced] = useState<boolean>(false);
 
   const loadClientDataForAdmin = async (clientInfo: RosterClient) => {
     setLoading(true);
-    const pin = typeof window !== "undefined" ? sessionStorage.getItem("admin_pin") || "0408" : "0408";
     try {
-      const res = await fetch(`/api/admin/client-profile?email=${encodeURIComponent(clientInfo.email)}&pin=${pin}`, {
-        headers: { "x-admin-pin": pin },
+      const res = await fetch(`/api/admin/client-profile?email=${encodeURIComponent(clientInfo.email)}`, {
         cache: "no-store",
       });
       const data = await res.json();
@@ -171,7 +177,8 @@ export default function ClientDashboard() {
 
         const workouts = data.client.assignedWorkouts || [];
         if (workouts.length > 0) {
-          const w = workouts[0];
+          setAvailableWorkoutDates(workouts.map((w: any) => w.date).filter(Boolean));
+          const w = workouts.find((wk: any) => wk.date === selectedWorkoutDate) || workouts[0];
           const loggedSets = data.client.loggedSets || [];
           const exercisesWithLogs = (w.workout_exercises || []).map((ex: any) => {
             const logs = loggedSets
@@ -181,6 +188,7 @@ export default function ClientDashboard() {
           });
           setAssignedWorkout({ ...w, exercises: exercisesWithLogs });
         } else {
+          setAvailableWorkoutDates([]);
           setAssignedWorkout(null);
         }
       }
@@ -195,20 +203,25 @@ export default function ClientDashboard() {
   useEffect(() => {
     async function initUser() {
       setLoading(true);
+
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      
+      if (!currentUser) {
+        router.push("/login");
+        return;
+      }
+
+      setUser(currentUser);
+
+      const isStaffAdmin = currentUser.app_metadata?.role === "admin";
+      setIsAdminMode(isStaffAdmin);
+
       const searchParams = new URLSearchParams(window.location.search);
       const viewAsParam = searchParams.get("viewAs");
-      const adminParam = searchParams.get("admin");
-      const savedAdminPin = typeof window !== "undefined" ? sessionStorage.getItem("admin_pin") : null;
-
-      const isStaffAdmin = savedAdminPin === "0408" || savedAdminPin === "bodiedbyesh" || adminParam === "true" || Boolean(viewAsParam);
 
       if (isStaffAdmin) {
-        setIsAdminMode(true);
-        if (!savedAdminPin) sessionStorage.setItem("admin_pin", "0408");
-
         try {
-          const rRes = await fetch(`/api/admin/client-profile?roster=true&pin=0408`, {
-            headers: { "x-admin-pin": "0408" },
+          const rRes = await fetch(`/api/admin/client-profile?roster=true`, {
             cache: "no-store",
           });
           const rData = await rRes.json();
@@ -223,16 +236,6 @@ export default function ClientDashboard() {
           console.error("Failed loading admin roster:", e);
         }
       }
-
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      
-      if (!currentUser) {
-        if (!isStaffAdmin) {
-          router.push("/login");
-          return;
-        }
-      } else {
-        setUser(currentUser);
 
         // Load profile (synced automatically by database signup trigger)
         const { data: existingProfile, error: profileErr } = await supabase
@@ -330,7 +333,6 @@ export default function ClientDashboard() {
             waistToHipRatio: scans[0].waist_to_hip_ratio,
           });
         }
-      }
 
       setLoading(false);
     }
@@ -338,73 +340,130 @@ export default function ClientDashboard() {
     initUser();
   }, [router, supabase]);
 
-  // Load client's workout for today
+  // Load client's workout for selected date
   useEffect(() => {
-    if (!profile) return;
+    if (!profile || isAdminMode) return;
     
-    async function loadTodayWorkout() {
+    async function loadWorkoutForDate(dateToLoad: string) {
       setWorkoutLoading(true);
-      const todayDate = new Date().toISOString().split("T")[0];
       try {
-        // 1. Fetch workout scheduled for today
+        // Fetch all client workout dates for quick navigation
+        const { data: allWorkouts } = await supabase
+          .from("workouts")
+          .select("date")
+          .eq("client_id", profile.id);
+        if (allWorkouts && Array.isArray(allWorkouts)) {
+          const dates = allWorkouts.map((w: any) => w.date).filter(Boolean);
+          setAvailableWorkoutDates(dates);
+        }
+
+        // 1. Fetch workout scheduled for selected date
         const { data: workoutData, error: wError } = await supabase
           .from("workouts")
           .select(`
             id,
             name,
             notes,
+            date,
             exercises: workout_exercises(
               id,
               exercise_name,
               target_sets,
               target_reps,
-              target_weight_lbs
+              target_weight_lbs,
+              order_index
             )
           `)
           .eq("client_id", profile.id)
-          .eq("date", todayDate)
+          .eq("date", dateToLoad)
           .maybeSingle();
 
         if (wError) throw wError;
 
-        if (workoutData) {
+        if (workoutData && Array.isArray(workoutData.exercises) && workoutData.exercises.length > 0) {
           // 2. Fetch logged sets for these exercises
           const exerciseIds = workoutData.exercises.map((e: any) => e.id);
-          if (exerciseIds.length > 0) {
-            const { data: loggedSetsData, error: lsError } = await supabase
-              .from("logged_sets")
-              .select("*")
-              .in("workout_exercise_id", exerciseIds);
+          const { data: loggedSetsData, error: lsError } = await supabase
+            .from("logged_sets")
+            .select("*")
+            .in("workout_exercise_id", exerciseIds);
 
-            if (lsError) throw lsError;
+          if (lsError) throw lsError;
 
-            // Map logged sets to the exercises
-            const exercisesWithLogs = workoutData.exercises.map((ex: any) => {
+          // Map logged sets to the exercises sorted by order_index
+          const exercisesWithLogs = [...workoutData.exercises]
+            .sort((a: any, b: any) => (a.order_index ?? 0) - (b.order_index ?? 0))
+            .map((ex: any) => {
               const logs = (loggedSetsData || [])
                 .filter((l: any) => l.workout_exercise_id === ex.id)
                 .sort((a: any, b: any) => a.set_index - b.set_index);
               return { ...ex, loggedSets: logs };
             });
 
-            setAssignedWorkout({
-              ...workoutData,
-              exercises: exercisesWithLogs,
-            });
-          } else {
-            setAssignedWorkout(workoutData);
-          }
+          setAssignedWorkout({
+            ...workoutData,
+            exercises: exercisesWithLogs,
+          });
+        } else if (workoutData) {
+          setAssignedWorkout(workoutData);
         } else {
           setAssignedWorkout(null);
         }
       } catch (err) {
-        console.error("Failed to load today's workout:", err);
+        console.error("Failed to load workout for date:", err);
       } finally {
         setWorkoutLoading(false);
       }
     }
 
-    loadTodayWorkout();
-  }, [profile, supabase]);
+    loadWorkoutForDate(selectedWorkoutDate);
+  }, [profile, selectedWorkoutDate, supabase, isAdminMode]);
+
+  // Real-time workout session volume / tonnage and progress metrics
+  const workoutMetrics = React.useMemo(() => {
+    if (!assignedWorkout || !Array.isArray(assignedWorkout.exercises)) {
+      return { totalVolumeLbs: 0, completedSets: 0, totalTargetSets: 0, completionPct: 0, totalExercises: 0 };
+    }
+    let totalVolumeLbs = 0;
+    let completedSets = 0;
+    let totalTargetSets = 0;
+
+    assignedWorkout.exercises.forEach((ex: any) => {
+      totalTargetSets += ex.target_sets || 0;
+      (ex.loggedSets || []).forEach((set: any) => {
+        if (set.is_completed) {
+          completedSets += 1;
+          const reps = set.reps_completed !== null && set.reps_completed !== undefined
+            ? Number(set.reps_completed)
+            : parseInt(ex.target_reps) || 0;
+          const weight = set.weight_lifted_lbs !== null && set.weight_lifted_lbs !== undefined
+            ? Number(set.weight_lifted_lbs)
+            : Number(ex.target_weight_lbs) || 0;
+          totalVolumeLbs += (reps * weight);
+        }
+      });
+    });
+
+    const completionPct = totalTargetSets > 0 ? Math.round((completedSets / totalTargetSets) * 100) : 0;
+    return {
+      totalVolumeLbs,
+      completedSets,
+      totalTargetSets,
+      completionPct,
+      totalExercises: assignedWorkout.exercises.length,
+    };
+  }, [assignedWorkout]);
+
+  // Date Navigation Helpers
+  const shiftWorkoutDate = (deltaDays: number) => {
+    const current = new Date(selectedWorkoutDate + "T12:00:00Z");
+    current.setUTCDate(current.getUTCDate() + deltaDays);
+    setSelectedWorkoutDate(current.toISOString().split("T")[0]);
+  };
+
+  const jumpToToday = () => {
+    setSelectedWorkoutDate(new Date().toISOString().split("T")[0]);
+  };
 
   const handleLogSet = async (exerciseId: string, setIndex: number, reps: number, weight: number, isCompleted: boolean) => {
     setLoggingSetId(`${exerciseId}-${setIndex}`);
@@ -423,7 +482,7 @@ export default function ClientDashboard() {
 
       const json = await res.json();
       if (json.success) {
-        // Update local state to reflect the completed set
+        // Update local state to reflect the completed set and trigger real-time volume re-calculation
         setAssignedWorkout((prev: any) => {
           if (!prev) return prev;
           const nextExercises = prev.exercises.map((ex: any) => {
@@ -454,19 +513,19 @@ export default function ClientDashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  // Simulate wearable metric drifts
+  // Simulate wearable metric drifts (gated when synced)
   useEffect(() => {
     const interval = setInterval(() => {
       setWearables((prev) => ({
         ...prev,
-        steps: prev.steps + Math.floor(Math.random() * 5),
+        steps: isWearableSynced ? prev.steps : prev.steps + Math.floor(Math.random() * 5),
         hrv: Math.max(40, Math.min(120, prev.hrv + Math.floor(Math.random() * 3) - 1)),
         strain: Math.max(0, Math.min(21, parseFloat((prev.strain + Math.random() * 0.2 - 0.1).toFixed(1)))),
         restingHr: Math.max(48, Math.min(72, prev.restingHr + Math.floor(Math.random() * 3) - 1)),
       }));
     }, 4000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isWearableSynced]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -1066,6 +1125,7 @@ export default function ClientDashboard() {
                   carbs: Math.max(0, dailyLog.target.carbs - dailyLog.carbs),
                   fat: Math.max(0, dailyLog.target.fat - dailyLog.fat),
                 }}
+                onLogRecipeAsMeal={handleFoodLogged}
               />
             </div>
           </div>
@@ -1219,230 +1279,460 @@ export default function ClientDashboard() {
 
         {/* ═══ WORKOUT TAB ═══ */}
         {activeTab === "workout" && (
-          <div className="grid lg:grid-cols-2 gap-8 animate-fadeIn">
-            {/* Today's Workout */}
-            <div className="glass-panel rounded-3xl p-6 md:p-8 border-white/5">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-xl bg-accent-lime/10 flex items-center justify-center text-accent-lime">
-                  <Dumbbell className="w-5 h-5" />
+          <div className="space-y-8 animate-fadeIn">
+            {/* Workout Header & Date Navigation Toolbar */}
+            <div className="glass-panel rounded-3xl p-6 md:p-8 border-white/5 space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-accent-lime/10 flex items-center justify-center text-accent-lime">
+                    <Dumbbell className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="font-display font-bold text-lg">
+                      {assignedWorkout ? assignedWorkout.name : "Workout & Training Program"}
+                    </h2>
+                    <p className="text-[10px] text-silver-slate uppercase tracking-wider">
+                      Strength tracking · Precision volume & adherence metrics
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="font-display font-bold text-lg">Today&apos;s Program</h2>
-                  <p className="text-[10px] text-silver-slate uppercase tracking-wider">
-                    {assignedWorkout ? assignedWorkout.name : "Your Tailored Routine"}
-                  </p>
+
+                {/* Date Navigator Controls */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => shiftWorkoutDate(-1)}
+                    className="touch-target p-2.5 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 text-silver-slate hover:text-ice-white transition-all cursor-pointer"
+                    title="Previous Day"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+
+                  <div className="relative flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 hover:border-accent-lime/40 transition-all cursor-pointer">
+                    <Calendar className="w-4 h-4 text-accent-lime" />
+                    <span className="text-xs font-semibold text-ice-white font-mono">
+                      {new Date(selectedWorkoutDate + "T12:00:00Z").toLocaleDateString("en-US", {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </span>
+                    <input
+                      type="date"
+                      value={selectedWorkoutDate}
+                      onChange={(e) => {
+                        if (e.target.value) setSelectedWorkoutDate(e.target.value);
+                      }}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                  </div>
+
+                  {selectedWorkoutDate !== new Date().toISOString().split("T")[0] && (
+                    <button
+                      type="button"
+                      onClick={jumpToToday}
+                      className="touch-target px-3 py-2 rounded-xl bg-accent-lime/10 border border-accent-lime/20 text-accent-lime hover:bg-accent-lime/20 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
+                    >
+                      Jump to Today
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => shiftWorkoutDate(1)}
+                    className="touch-target p-2.5 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 text-silver-slate hover:text-ice-white transition-all cursor-pointer"
+                    title="Next Day"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
 
-              {workoutLoading ? (
-                <div className="flex flex-col items-center justify-center py-12 text-silver-slate text-xs gap-2">
-                  <Loader2 className="w-5 h-5 animate-spin text-accent-lime" />
-                  <span>Loading today's assigned workout...</span>
-                </div>
-              ) : assignedWorkout ? (
-                <div className="space-y-6">
-                  {assignedWorkout.notes && (
-                    <div className="p-4 bg-white/5 rounded-2xl border border-white/5 text-xs text-silver-slate italic leading-relaxed">
-                      Coach Notes: &quot;{assignedWorkout.notes}&quot;
+              {/* Status Badge Strip */}
+              <div className="flex items-center gap-3 pt-2 border-t border-white/5">
+                {selectedWorkoutDate === new Date().toISOString().split("T")[0] ? (
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-accent-lime bg-accent-lime/10 border border-accent-lime/20 px-3 py-1 rounded-full flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-accent-lime animate-pulse" />
+                    Today&apos;s Live Training Session
+                  </span>
+                ) : selectedWorkoutDate < new Date().toISOString().split("T")[0] ? (
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-silver-slate bg-white/5 border border-white/10 px-3 py-1 rounded-full flex items-center gap-1.5">
+                    <Clock className="w-3 h-3 text-accent-violet" />
+                    Historical Workout Log · {selectedWorkoutDate}
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400 bg-blue-500/10 border border-blue-500/20 px-3 py-1 rounded-full flex items-center gap-1.5">
+                    <Calendar className="w-3 h-3" />
+                    Scheduled Program · {selectedWorkoutDate}
+                  </span>
+                )}
+              </div>
+
+              {/* Real-time Session Volume & Progress Calculator Strip */}
+              {assignedWorkout && (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+                  <div className="p-4 rounded-2xl bg-cyber-slate border border-white/5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <TrendingUp className="w-4 h-4 text-accent-lime" />
+                      <span className="text-[10px] text-silver-slate uppercase tracking-wider">Total Volume (Tonnage)</span>
                     </div>
-                  )}
-
-                  <div className="space-y-4">
-                    {assignedWorkout.exercises?.map((exercise: any, i: number) => {
-                      // Count completed sets
-                      const completedSets = (exercise.loggedSets || []).filter((s: any) => s.is_completed).length;
-                      const progressPct = Math.round((completedSets / exercise.target_sets) * 100);
-
-                      return (
-                        <div
-                          key={exercise.id}
-                          className="p-4 rounded-2xl bg-cyber-slate border border-white/5 space-y-3"
-                        >
-                          {/* Exercise Header */}
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <span className="w-8 h-8 rounded-lg bg-accent-lime/10 flex items-center justify-center text-accent-lime font-display font-bold text-xs">
-                                {i + 1}
-                              </span>
-                              <div>
-                                <p className="text-sm font-semibold text-ice-white">{exercise.exercise_name}</p>
-                                <p className="text-[10px] text-silver-slate">
-                                  Goal: {exercise.target_sets} sets &times; {exercise.target_reps} reps {exercise.target_weight_lbs ? `@ ${exercise.target_weight_lbs} lbs` : ""}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <span className="text-[10px] text-accent-lime font-bold uppercase tracking-wider">
-                                {completedSets}/{exercise.target_sets} Sets
-                              </span>
-                              <div className="w-16 h-1 rounded-full bg-white/5 mt-1 overflow-hidden">
-                                <div
-                                  className="h-full rounded-full bg-accent-lime transition-width"
-                                  style={{ width: `${progressPct}%` }}
-                                />
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Sets Logger */}
-                          <div className="grid sm:grid-cols-2 gap-2 pt-2 border-t border-white/5">
-                            {Array.from({ length: exercise.target_sets }).map((_, setIdx) => {
-                              const loggedSet = (exercise.loggedSets || []).find((l: any) => l.set_index === setIdx);
-                              const isCompleted = loggedSet?.is_completed || false;
-                              const uniqueKey = `${exercise.id}-${setIdx}`;
-
-                              return (
-                                <div
-                                  key={setIdx}
-                                  className="flex items-center justify-between text-xs bg-white/[0.01] border border-white/5 hover:border-white/10 px-3 py-2 rounded-xl transition-all"
-                                >
-                                  <span className="w-5 h-5 rounded-full bg-white/5 flex items-center justify-center text-[10px] font-bold text-silver-slate font-mono">
-                                    S{setIdx + 1}
-                                  </span>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[10px] text-silver-slate">Reps:</span>
-                                    <input
-                                      type="number"
-                                      defaultValue={(loggedSet?.reps_completed ?? parseInt(exercise.target_reps)) || 10}
-                                      id={`reps-${uniqueKey}`}
-                                      disabled={isCompleted}
-                                      className="w-10 bg-white/5 border border-white/10 rounded px-1 py-0.5 text-center text-ice-white focus:outline-none focus:border-accent-lime text-[11px] disabled:opacity-50"
-                                    />
-                                    <span className="text-[10px] text-silver-slate">lbs:</span>
-                                    <input
-                                      type="number"
-                                      defaultValue={loggedSet?.weight_lifted_lbs ?? exercise.target_weight_lbs ?? 0}
-                                      id={`weight-${uniqueKey}`}
-                                      disabled={isCompleted}
-                                      className="w-12 bg-white/5 border border-white/10 rounded px-1 py-0.5 text-center text-ice-white focus:outline-none focus:border-accent-lime text-[11px] disabled:opacity-50"
-                                    />
-                                  </div>
-                                  <button
-                                    type="button"
-                                    disabled={loggingSetId === uniqueKey}
-                                    onClick={() => {
-                                      const repsInput = document.getElementById(`reps-${uniqueKey}`) as HTMLInputElement;
-                                      const weightInput = document.getElementById(`weight-${uniqueKey}`) as HTMLInputElement;
-                                      const valReps = parseInt(repsInput?.value) || 0;
-                                      const valWeight = parseInt(weightInput?.value) || 0;
-                                      handleLogSet(exercise.id, setIdx, valReps, valWeight, !isCompleted);
-                                    }}
-                                    className={`w-6 h-6 rounded-lg flex items-center justify-center border transition-all cursor-pointer ${
-                                      isCompleted
-                                        ? "bg-accent-lime border-accent-lime text-cyber-slate"
-                                        : "border-white/10 text-silver-slate hover:border-white/20 hover:text-ice-white"
-                                    }`}
-                                  >
-                                    {loggingSetId === uniqueKey ? (
-                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                    ) : (
-                                      <Check className="w-3.5 h-3.5" />
-                                    )}
-                                  </button>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
+                    <div className="font-display font-bold text-2xl text-accent-lime">
+                      <RollingCounter value={workoutMetrics.totalVolumeLbs} />
+                      <span className="text-xs text-silver-slate font-normal ml-1">lbs</span>
+                    </div>
+                    <p className="text-[10px] text-silver-slate mt-1">
+                      Live sum of (reps &times; weight)
+                    </p>
                   </div>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-4 py-16 rounded-2xl border border-white/5 bg-cyber-slate/40 text-center">
-                  <Dumbbell className="w-10 h-10 text-silver-slate/30 animate-pulse" />
-                  <p className="text-silver-slate text-xs max-w-xs">
-                    No custom workout routine has been scheduled for you today yet.
-                    <br />
-                    <span className="text-[10px] text-silver-slate/50 mt-1 block">
-                      Check back soon! Esh is styling your daily workout targets.
-                    </span>
-                  </p>
+
+                  <div className="p-4 rounded-2xl bg-cyber-slate border border-white/5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Check className="w-4 h-4 text-accent-lime" />
+                      <span className="text-[10px] text-silver-slate uppercase tracking-wider">Sets Completed</span>
+                    </div>
+                    <div className="font-display font-bold text-2xl text-ice-white">
+                      {workoutMetrics.completedSets}
+                      <span className="text-sm text-silver-slate font-normal"> / {workoutMetrics.totalTargetSets}</span>
+                    </div>
+                    <p className="text-[10px] text-silver-slate mt-1">
+                      Across {workoutMetrics.totalExercises} exercises
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-cyber-slate border border-white/5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Award className="w-4 h-4 text-accent-violet" />
+                      <span className="text-[10px] text-silver-slate uppercase tracking-wider">Completion Rate</span>
+                    </div>
+                    <div className="font-display font-bold text-2xl text-accent-violet">
+                      {workoutMetrics.completionPct}%
+                    </div>
+                    <div className="w-full h-1.5 rounded-full bg-white/5 mt-2 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-accent-violet transition-width duration-500"
+                        style={{ width: `${workoutMetrics.completionPct}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-cyber-slate border border-white/5 flex flex-col justify-between">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Dumbbell className="w-4 h-4 text-ice-white" />
+                      <span className="text-[10px] text-silver-slate uppercase tracking-wider">Session Status</span>
+                    </div>
+                    <div>
+                      {workoutMetrics.completionPct === 100 ? (
+                        <span className="inline-flex items-center gap-1.5 text-emerald-400 text-xs font-bold bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20">
+                          <CheckCheck className="w-4 h-4" />
+                          Session Completed!
+                        </span>
+                      ) : workoutMetrics.completionPct > 0 ? (
+                        <span className="inline-flex items-center gap-1.5 text-accent-lime text-xs font-bold bg-accent-lime/10 px-3 py-1.5 rounded-xl border border-accent-lime/20">
+                          <Flame className="w-4 h-4" />
+                          In Progress
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 text-silver-slate text-xs font-semibold bg-white/5 px-3 py-1.5 rounded-xl border border-white/10">
+                          <Clock className="w-4 h-4" />
+                          Ready to Start
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Form Check */}
-            <div className="glass-panel rounded-3xl p-6 md:p-8 border-white/5">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-xl bg-accent-violet/10 flex items-center justify-center text-accent-violet">
-                  <Camera className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="font-display font-bold text-lg">AI Form Check</h2>
-                  <p className="text-[10px] text-silver-slate uppercase tracking-wider">
-                    MediaPipe Pose · Joint Angle Analysis
-                  </p>
-                </div>
-              </div>
-              <div className="flex flex-col items-center gap-4 p-8 rounded-2xl border-2 border-dashed border-white/10">
-                <div className="w-16 h-16 rounded-2xl bg-accent-violet/10 flex items-center justify-center text-accent-violet">
-                  <Camera className="w-8 h-8" />
-                </div>
-                <p className="text-silver-slate text-sm text-center">
-                  Record a video of your set — AI will analyze joint angles, depth, and flag form issues in real-time
-                </p>
-                <div className="flex flex-wrap gap-2 justify-center">
-                  {["Squat Depth", "Knee Tracking", "Back Angle", "Hip Hinge"].map((check) => (
-                    <span
-                      key={check}
-                      className="px-3 py-1 rounded-full bg-white/5 text-silver-slate text-[10px] font-medium"
-                    >
-                      {check}
+            {/* Workout Details & Form Check Grid */}
+            <div className="grid lg:grid-cols-2 gap-8">
+              {/* Workout Exercises & Set Logger */}
+              <div className="glass-panel rounded-3xl p-6 md:p-8 border-white/5">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-accent-lime/10 flex items-center justify-center text-accent-lime">
+                      <Dumbbell className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-display font-bold text-lg">Exercise Log & Sets</h3>
+                      <p className="text-[10px] text-silver-slate uppercase tracking-wider">
+                        {assignedWorkout ? `${assignedWorkout.exercises?.length || 0} Exercises assigned` : "No exercises scheduled"}
+                      </p>
+                    </div>
+                  </div>
+                  {assignedWorkout && (
+                    <span className="text-xs font-mono text-accent-lime bg-accent-lime/10 px-2.5 py-1 rounded-lg">
+                      {workoutMetrics.totalVolumeLbs.toLocaleString()} lbs volume
                     </span>
-                  ))}
+                  )}
                 </div>
-                <button className="inline-flex items-center gap-2 bg-accent-violet text-white px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all focus-ring">
-                  <Camera className="w-4 h-4" />
-                  Record Set
-                </button>
+
+                {workoutLoading ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-silver-slate text-xs gap-2">
+                    <Loader2 className="w-6 h-6 animate-spin text-accent-lime" />
+                    <span>Loading workout routine for {selectedWorkoutDate}...</span>
+                  </div>
+                ) : assignedWorkout ? (
+                  <div className="space-y-6">
+                    {assignedWorkout.notes && (
+                      <div className="p-4 bg-white/5 rounded-2xl border border-white/5 text-xs text-silver-slate italic leading-relaxed">
+                        Coach Notes: &quot;{assignedWorkout.notes}&quot;
+                      </div>
+                    )}
+
+                    <div className="space-y-4">
+                      {assignedWorkout.exercises?.map((exercise: any, i: number) => {
+                        const completedSets = (exercise.loggedSets || []).filter((s: any) => s.is_completed).length;
+                        const progressPct = Math.round((completedSets / exercise.target_sets) * 100);
+                        const exerciseVolume = (exercise.loggedSets || []).reduce((acc: number, s: any) => {
+                          if (s.is_completed) {
+                            const reps = s.reps_completed !== null && s.reps_completed !== undefined
+                              ? Number(s.reps_completed)
+                              : parseInt(exercise.target_reps) || 0;
+                            const weight = s.weight_lifted_lbs !== null && s.weight_lifted_lbs !== undefined
+                              ? Number(s.weight_lifted_lbs)
+                              : Number(exercise.target_weight_lbs) || 0;
+                            return acc + (reps * weight);
+                          }
+                          return acc;
+                        }, 0);
+
+                        return (
+                          <div
+                            key={exercise.id}
+                            className="p-4 rounded-2xl bg-cyber-slate border border-white/5 space-y-3"
+                          >
+                            {/* Exercise Header */}
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <span className="w-8 h-8 rounded-lg bg-accent-lime/10 flex items-center justify-center text-accent-lime font-display font-bold text-xs">
+                                  {i + 1}
+                                </span>
+                                <div>
+                                  <p className="text-sm font-semibold text-ice-white">{exercise.exercise_name}</p>
+                                  <p className="text-[10px] text-silver-slate">
+                                    Target: {exercise.target_sets} sets &times; {exercise.target_reps} reps {exercise.target_weight_lbs ? `@ ${exercise.target_weight_lbs} lbs` : ""}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-[10px] text-accent-lime font-bold uppercase tracking-wider block">
+                                  {completedSets}/{exercise.target_sets} Sets
+                                </span>
+                                {exerciseVolume > 0 && (
+                                  <span className="text-[9px] text-silver-slate font-mono block">
+                                    {exerciseVolume.toLocaleString()} lbs
+                                  </span>
+                                )}
+                                <div className="w-16 h-1 rounded-full bg-white/5 mt-1 overflow-hidden ml-auto">
+                                  <div
+                                    className="h-full rounded-full bg-accent-lime transition-width"
+                                    style={{ width: `${progressPct}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Sets Logger */}
+                            <div className="grid sm:grid-cols-2 gap-2 pt-2 border-t border-white/5">
+                              {Array.from({ length: exercise.target_sets }).map((_, setIdx) => {
+                                const loggedSet = (exercise.loggedSets || []).find((l: any) => l.set_index === setIdx);
+                                const isCompleted = loggedSet?.is_completed || false;
+                                const uniqueKey = `${exercise.id}-${setIdx}`;
+
+                                return (
+                                  <div
+                                    key={setIdx}
+                                    className={`flex items-center justify-between text-xs border px-3 py-2 rounded-xl transition-all ${
+                                      isCompleted
+                                        ? "bg-accent-lime/5 border-accent-lime/30"
+                                        : "bg-white/[0.01] border-white/5 hover:border-white/10"
+                                    }`}
+                                  >
+                                    <span className="w-5 h-5 rounded-full bg-white/5 flex items-center justify-center text-[10px] font-bold text-silver-slate font-mono">
+                                      S{setIdx + 1}
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[10px] text-silver-slate">Reps:</span>
+                                      <input
+                                        type="number"
+                                        defaultValue={(loggedSet?.reps_completed ?? parseInt(exercise.target_reps)) || 10}
+                                        id={`reps-${uniqueKey}`}
+                                        disabled={isCompleted}
+                                        className="w-10 bg-white/5 border border-white/10 rounded px-1 py-0.5 text-center text-ice-white focus:outline-none focus:border-accent-lime text-[11px] disabled:opacity-50"
+                                      />
+                                      <span className="text-[10px] text-silver-slate">lbs:</span>
+                                      <input
+                                        type="number"
+                                        defaultValue={loggedSet?.weight_lifted_lbs ?? exercise.target_weight_lbs ?? 0}
+                                        id={`weight-${uniqueKey}`}
+                                        disabled={isCompleted}
+                                        className="w-12 bg-white/5 border border-white/10 rounded px-1 py-0.5 text-center text-ice-white focus:outline-none focus:border-accent-lime text-[11px] disabled:opacity-50"
+                                      />
+                                    </div>
+                                    <button
+                                      type="button"
+                                      disabled={loggingSetId === uniqueKey}
+                                      onClick={() => {
+                                        const repsInput = document.getElementById(`reps-${uniqueKey}`) as HTMLInputElement;
+                                        const weightInput = document.getElementById(`weight-${uniqueKey}`) as HTMLInputElement;
+                                        const valReps = parseInt(repsInput?.value) || 0;
+                                        const valWeight = parseInt(weightInput?.value) || 0;
+                                        handleLogSet(exercise.id, setIdx, valReps, valWeight, !isCompleted);
+                                      }}
+                                      className={`w-6 h-6 rounded-lg flex items-center justify-center border transition-all cursor-pointer ${
+                                        isCompleted
+                                          ? "bg-accent-lime border-accent-lime text-cyber-slate font-bold shadow-md shadow-accent-lime/20"
+                                          : "border-white/10 text-silver-slate hover:border-white/20 hover:text-ice-white"
+                                      }`}
+                                    >
+                                      {loggingSetId === uniqueKey ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                      ) : (
+                                        <Check className="w-3.5 h-3.5" />
+                                      )}
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-4 py-16 rounded-2xl border border-white/5 bg-cyber-slate/40 text-center">
+                    <Dumbbell className="w-10 h-10 text-silver-slate/30 animate-pulse" />
+                    <p className="text-silver-slate text-xs max-w-xs">
+                      No workout routine found for{" "}
+                      <span className="text-ice-white font-semibold">{selectedWorkoutDate}</span>.
+                      <br />
+                      <span className="text-[10px] text-silver-slate/50 mt-1 block">
+                        Use the date selector above or weekly calendar below to navigate to scheduled days.
+                      </span>
+                    </p>
+                    {availableWorkoutDates.length > 0 && (
+                      <div className="flex flex-wrap gap-2 justify-center mt-2 max-w-xs">
+                        <span className="text-[10px] text-silver-slate uppercase tracking-wider block w-full">
+                          Available Workout Dates:
+                        </span>
+                        {availableWorkoutDates.slice(0, 5).map((d) => (
+                          <button
+                            key={d}
+                            type="button"
+                            onClick={() => setSelectedWorkoutDate(d)}
+                            className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-accent-lime/10 hover:text-accent-lime border border-white/10 text-[10px] font-mono transition-all cursor-pointer"
+                          >
+                            {d}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* AI Form Check Card */}
+              <div className="glass-panel rounded-3xl p-6 md:p-8 border-white/5">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 rounded-xl bg-accent-violet/10 flex items-center justify-center text-accent-violet">
+                    <Camera className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-display font-bold text-lg">AI Form Check</h3>
+                    <p className="text-[10px] text-silver-slate uppercase tracking-wider">
+                      MediaPipe Pose · Joint Angle Analysis
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-col items-center gap-4 p-8 rounded-2xl border-2 border-dashed border-white/10">
+                  <div className="w-16 h-16 rounded-2xl bg-accent-violet/10 flex items-center justify-center text-accent-violet">
+                    <Camera className="w-8 h-8" />
+                  </div>
+                  <p className="text-silver-slate text-sm text-center">
+                    Record a video of your set — AI will analyze joint angles, depth, and flag form issues in real-time
+                  </p>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {["Squat Depth", "Knee Tracking", "Back Angle", "Hip Hinge"].map((check) => (
+                      <span
+                        key={check}
+                        className="px-3 py-1 rounded-full bg-white/5 text-silver-slate text-[10px] font-medium"
+                      >
+                        {check}
+                      </span>
+                    ))}
+                  </div>
+                  <button className="inline-flex items-center gap-2 bg-accent-violet text-white px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all focus-ring cursor-pointer">
+                    <Camera className="w-4 h-4" />
+                    Record Set
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* Weekly Overview */}
-            <div className="glass-panel rounded-3xl p-6 md:p-8 border-white/5 lg:col-span-2">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-xl bg-accent-lime/10 flex items-center justify-center text-accent-lime">
-                  <Clock className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="font-display font-bold text-lg">This Week</h2>
-                  <p className="text-[10px] text-silver-slate uppercase tracking-wider">
-                    Training adherence
-                  </p>
+            {/* Weekly Adherence & History Navigator */}
+            <div className="glass-panel rounded-3xl p-6 md:p-8 border-white/5">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-accent-lime/10 flex items-center justify-center text-accent-lime">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-display font-bold text-lg">Weekly Schedule & Adherence</h3>
+                    <p className="text-[10px] text-silver-slate uppercase tracking-wider">
+                      Tap any day to view or record that day&apos;s workout log
+                    </p>
+                  </div>
                 </div>
               </div>
-              <div className="grid grid-cols-7 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
                 {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, i) => {
-                  const isToday = i === new Date().getDay() - 1;
-                  const completed = i < new Date().getDay() - 1;
+                  const now = new Date();
+                  const currentDayOfWeek = now.getDay();
+                  const mondayOffset = currentDayOfWeek === 0 ? -6 : 1 - currentDayOfWeek;
+                  const dayDate = new Date(now);
+                  dayDate.setDate(now.getDate() + mondayOffset + i);
+                  const dayIso = dayDate.toISOString().split("T")[0];
+
+                  const isToday = dayIso === new Date().toISOString().split("T")[0];
+                  const isSelected = dayIso === selectedWorkoutDate;
+                  const hasWorkout = availableWorkoutDates.includes(dayIso);
                   const isRest = i === 1 || i === 3 || i === 6;
+
                   return (
-                    <div
+                    <button
                       key={day}
-                      className={`p-3 rounded-xl text-center border transition-all ${
-                        isToday
-                          ? "border-accent-lime bg-accent-lime/5"
-                          : completed
-                            ? "border-white/5 bg-white/5"
-                            : "border-white/5"
+                      type="button"
+                      onClick={() => setSelectedWorkoutDate(dayIso)}
+                      className={`p-3.5 rounded-2xl text-center border transition-all cursor-pointer ${
+                        isSelected
+                          ? "border-accent-lime bg-accent-lime/10 shadow-lg shadow-accent-lime/10"
+                          : isToday
+                            ? "border-accent-lime/50 bg-accent-lime/5"
+                            : "border-white/5 bg-cyber-slate/60 hover:border-white/20"
                       }`}
                     >
-                      <p className={`text-[10px] font-bold uppercase ${isToday ? "text-accent-lime" : "text-silver-slate"}`}>
+                      <p className={`text-[10px] font-bold uppercase ${isSelected || isToday ? "text-accent-lime" : "text-silver-slate"}`}>
                         {day}
                       </p>
-                      <div className="mt-2">
-                        {isRest ? (
+                      <p className="text-xs font-mono font-semibold text-ice-white mt-0.5">
+                        {dayDate.getDate()}
+                      </p>
+                      <div className="mt-2.5">
+                        {hasWorkout ? (
+                          <div className="flex items-center justify-center gap-1 text-[10px] text-accent-lime font-bold">
+                            <Dumbbell className="w-3.5 h-3.5" />
+                            <span>Plan</span>
+                          </div>
+                        ) : isRest ? (
                           <span className="text-silver-slate/30 text-xs">Rest</span>
-                        ) : completed ? (
-                          <Flame className="w-5 h-5 text-accent-lime mx-auto" />
                         ) : isToday ? (
-                          <Dumbbell className="w-5 h-5 text-accent-lime mx-auto animate-pulse" />
+                          <Flame className="w-4 h-4 text-accent-lime/80 mx-auto animate-pulse" />
                         ) : (
                           <span className="text-silver-slate/30 text-xs">—</span>
                         )}
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -1487,6 +1777,7 @@ export default function ClientDashboard() {
         onClose={() => setIsHealthSyncModalOpen(false)}
         userId={user?.id || profile?.id || "client-user"}
         onSyncSuccess={(newLog) => {
+          setIsWearableSynced(true);
           setWearables((prev) => ({
             ...prev,
             steps: newLog.steps,

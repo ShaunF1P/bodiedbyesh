@@ -1,5 +1,8 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireAdminSession } from "@/lib/auth/admin";
+import { validateRequestBody } from "@/lib/validation/api-validator";
+import { AdminLeadsPatchSchema } from "@/lib/validation/schemas";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -36,12 +39,9 @@ create policy "Allow update for service role" on public.coaching_leads for updat
 
 export async function GET(request: NextRequest) {
   try {
-    // Basic verification of admin passcode via headers
-    const authHeader = request.headers.get("x-admin-pin");
-    const adminPin = process.env.ADMIN_PIN || "0408";
-    
-    if (authHeader !== adminPin && authHeader !== "bodiedbyesh") {
-      return Response.json({ error: "Unauthorized access" }, { status: 401 });
+    const { error: authError } = await requireAdminSession(request);
+    if (authError) {
+      return authError;
     }
 
     const supabase = getSupabase();
@@ -71,25 +71,17 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("x-admin-pin");
-    const adminPin = process.env.ADMIN_PIN || "0408";
-
-    if (authHeader !== adminPin && authHeader !== "bodiedbyesh") {
-      return Response.json({ error: "Unauthorized access" }, { status: 401 });
+    const { error: authError } = await requireAdminSession(request);
+    if (authError) {
+      return authError;
     }
 
-    const body = await request.json();
-    const { id, status } = body;
-
-    if (!id || !status) {
-      return Response.json({ error: "id and status are required" }, { status: 400 });
+    const validation = await validateRequestBody(request, AdminLeadsPatchSchema);
+    if (!validation.success) {
+      return validation.response;
     }
 
-    const validStatuses = ["new", "contacted", "enrolled", "archived"];
-    if (!validStatuses.includes(status)) {
-      return Response.json({ error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` }, { status: 400 });
-    }
-
+    const { id, status } = validation.data;
     const supabase = getSupabase();
 
     const { data, error } = await supabase

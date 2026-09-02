@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
 import {
   getDailyDevotional,
   getAllDevotionals,
@@ -7,31 +6,14 @@ import {
   saveReflection,
 } from "@/lib/coastal/db";
 import { DevotionalReflection } from "@/types/coastal";
-
-async function getAuthUser(request: NextRequest) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) return null;
-
-  try {
-    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll() {
-          // No-op in route handler
-        },
-      },
-    });
-
-    const { data: { user } } = await supabase.auth.getUser();
-    return user ? { user, supabase } : null;
-  } catch {
-    return null;
-  }
-}
+import { requireUserSession, getAuthUser } from "@/lib/auth/user";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
+import { validateRequestBody, validateQueryParams } from "@/lib/validation/api-validator";
+import {
+  CoastalDevotionalQuerySchema,
+  CoastalDevotionalReflectionSchema,
+} from "@/lib/validation/schemas";
 
 /**
  * GET /api/coastal/devotionals
@@ -39,16 +21,20 @@ async function getAuthUser(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const day = searchParams.get("day");
-    const date = searchParams.get("date");
-    const all = searchParams.get("all") === "true";
-    const groupId = searchParams.get("groupId") || undefined;
+    const queryValidation = validateQueryParams(
+      request.nextUrl.searchParams,
+      CoastalDevotionalQuerySchema
+    );
+    if (!queryValidation.success) {
+      return queryValidation.response;
+    }
+
+    const { day, date, all, groupId } = queryValidation.data;
 
     const auth = await getAuthUser(request);
     const client = auth?.supabase;
 
-    if (all) {
+    if (all === "true") {
       const devotionals = getAllDevotionals();
       return NextResponse.json({
         success: true,
@@ -75,6 +61,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error: any) {
+    logger.error("Failed to fetch devotional data:", error);
     return NextResponse.json(
       { success: false, error: error.message || "Failed to fetch devotional data" },
       { status: 500 }
@@ -84,36 +71,32 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/coastal/devotionals
- * Save reflection journal entry
+ * Save reflection journal entry (Strict session authentication required)
  */
 export async function POST(request: NextRequest) {
+  // ── Rate Limiting (30 requests/minute per IP) ──────────────────────────
+  const rateLimit = checkRateLimit(request, "auth");
+  if (!rateLimit.success) {
+    return rateLimitResponse(rateLimit);
+  }
+
+  // ── Strict Session Authentication (Anti-Spoofing) ─────────────────────
+  const { user, error: authError, supabase } = await requireUserSession(request);
+  if (authError || !user) {
+    return authError || NextResponse.json(
+      { success: false, error: "Unauthorized: Active user session required" },
+      { status: 401 }
+    );
+  }
+
+  const validation = await validateRequestBody(request, CoastalDevotionalReflectionSchema);
+  if (!validation.success) {
+    return validation.response;
+  }
+
   try {
-    const body = await request.json();
-    const { devotionalId, dayNumber, reflectionText, isShared, groupId } = body;
-
-    if (!devotionalId) {
-      return NextResponse.json(
-        { success: false, error: "devotionalId is required" },
-        { status: 400 }
-      );
-    }
-
-    if (!reflectionText || typeof reflectionText !== "string" || reflectionText.trim().length === 0) {
-      return NextResponse.json(
-        { success: false, error: "Reflection text cannot be empty" },
-        { status: 400 }
-      );
-    }
-
-    if (reflectionText.length > 4000) {
-      return NextResponse.json(
-        { success: false, error: "Reflection cannot exceed 4,000 characters" },
-        { status: 400 }
-      );
-    }
-
-    const auth = await getAuthUser(request);
-    const userId = auth?.user?.id || body.userId || "guest-user";
+    const { devotionalId, dayNumber, reflectionText, isShared, groupId } = validation.data;
+    const userId = user.id;
 
     const result = await saveReflection(
       {
@@ -124,7 +107,7 @@ export async function POST(request: NextRequest) {
         isShared: Boolean(isShared),
         groupId,
       },
-      auth?.supabase
+      supabase ?? undefined
     );
 
     if (!result.success) {
@@ -134,8 +117,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    logger.info(`[coastal-devotionals] Saved reflection for day ${dayNumber || 1} by user ${userId.slice(0, 8)}***`);
+
     return NextResponse.json({ success: true, data: result.reflection });
   } catch (error: any) {
+    logger.error("Internal devotional save error:", error);
     return NextResponse.json(
       { success: false, error: error.message || "Internal server error" },
       { status: 500 }

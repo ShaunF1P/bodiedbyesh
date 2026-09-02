@@ -39,6 +39,7 @@ import {
   calculateMileage,
   calculateActiveMinutes,
   calculateCalories,
+  getLocalISODate,
 } from "@/lib/coastal/db";
 import HealthTrackerSyncModal from "./HealthTrackerSyncModal";
 
@@ -67,8 +68,20 @@ export default function StepTracker({
   onOpenAuthModal,
   className = "",
 }: StepTrackerProps) {
-  // Today's date string YYYY-MM-DD
-  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+  // Precomputed date strings for hook purity
+  const { todayStr, yesterdayStr, sevenDaysAgoStr, thirtyDaysAgoStr } = useMemo(() => {
+    const now = new Date();
+    const today = getLocalISODate(now);
+    const yesterday = getLocalISODate(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+    const sevenDays = getLocalISODate(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000));
+    const thirtyDays = getLocalISODate(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
+    return {
+      todayStr: today,
+      yesterdayStr: yesterday,
+      sevenDaysAgoStr: sevenDays,
+      thirtyDaysAgoStr: thirtyDays,
+    };
+  }, []);
 
   // Form & Mode State
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
@@ -488,15 +501,13 @@ export default function StepTracker({
   // Filtered logs for history display
   const displayedLogs = useMemo(() => {
     if (historyFilter === "7days") {
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-      return logs.filter((l) => l.log_date >= sevenDaysAgo);
+      return logs.filter((l) => l.log_date >= sevenDaysAgoStr);
     }
     if (historyFilter === "30days") {
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-      return logs.filter((l) => l.log_date >= thirtyDaysAgo);
+      return logs.filter((l) => l.log_date >= thirtyDaysAgoStr);
     }
     return logs;
-  }, [logs, historyFilter]);
+  }, [logs, historyFilter, sevenDaysAgoStr, thirtyDaysAgoStr]);
 
   return (
     <div className={`space-y-6 ${className}`}>
@@ -738,12 +749,10 @@ export default function StepTracker({
             <button
               type="button"
               onClick={() => {
-                const yDate = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-                setSelectedDate(yDate);
+                setSelectedDate(yesterdayStr);
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                selectedDate !== todayStr &&
-                selectedDate === new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+                selectedDate !== todayStr && selectedDate === yesterdayStr
                   ? "bg-accent-lime text-cyber-slate shadow-sm"
                   : "glass-panel border border-white/10 text-silver-slate hover:text-ice-white"
               }`}

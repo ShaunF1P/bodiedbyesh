@@ -1,6 +1,9 @@
 import { NextRequest } from "next/server";
-import { sendEmail } from "@/lib/mail";
-import { sendSMS } from "@/lib/sms";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { logger, maskEmail, maskName } from "@/lib/logger";
+import { validateRequestBody } from "@/lib/validation/api-validator";
+import { BookAppointmentSchema } from "@/lib/validation/schemas";
+import { container } from "@/lib/container";
 
 /**
  * POST /api/book-appointment
@@ -11,16 +14,19 @@ import { sendSMS } from "@/lib/sms";
  * Body: { email, name, programName, slot }
  */
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { email, name, programName, slot } = body;
+  // ── Rate Limiting (5 requests/minute per IP) ──────────────────────────
+  const rateLimit = checkRateLimit(request, "form");
+  if (!rateLimit.success) {
+    return rateLimitResponse(rateLimit);
+  }
 
-    if (!slot) {
-      return Response.json(
-        { error: "Missing selected appointment slot" },
-        { status: 400 }
-      );
-    }
+  const validation = await validateRequestBody(request, BookAppointmentSchema);
+  if (!validation.success) {
+    return validation.response;
+  }
+
+  try {
+    const { email, name, programName, slot } = validation.data;
 
     const resolvedEmail = (email || "client@bodiedbyesh.com").trim().toLowerCase();
     const resolvedName = (name || "Athlete").trim();
@@ -53,7 +59,7 @@ export async function POST(request: NextRequest) {
       </div>
     `;
 
-    await sendEmail({
+    await container.communicationService.sendEmail({
       to: resolvedEmail,
       subject: clientSubject,
       html: clientHtml,
@@ -63,7 +69,7 @@ export async function POST(request: NextRequest) {
     const adminEmail = process.env.COACH_NOTIFICATION_EMAIL || "BodiedByEsh@gmail.com";
     const adminPhone = process.env.COACH_NOTIFICATION_PHONE || "+17728774231";
 
-    const adminSubject = `New Kickoff Call Scheduled: ${resolvedName}`;
+    const adminSubject = `New Kickoff Call Scheduled: ${maskName(resolvedName)}`;
     const adminHtml = `
       <div style="font-family: sans-serif; background-color: #080A0E; color: #f8fafc; padding: 40px; border-radius: 16px; border: 1px solid #1e293b; max-width: 600px; margin: auto;">
         <h2 style="color: #c5f82a; font-size: 20px; font-weight: bold; margin-bottom: 16px;">New Kickoff Call Booked</h2>
@@ -79,20 +85,22 @@ export async function POST(request: NextRequest) {
       </div>
     `;
 
-    await sendEmail({
+    await container.communicationService.sendEmail({
       to: adminEmail,
       subject: adminSubject,
       html: adminHtml,
     });
 
-    await sendSMS({
+    await container.communicationService.sendSMS({
       to: adminPhone,
       body: `Bodied by Esh Lead: ${resolvedName} is inquiring about ${resolvedProgram}. Kickoff scheduled: ${slot}.`,
     });
 
+    logger.info(`[book-appointment] Appointment booked for ${maskEmail(resolvedEmail)} at ${slot}`);
+
     return Response.json({ success: true });
   } catch (err: any) {
-    console.error("[book-appointment] Error:", err);
+    logger.error("[book-appointment] Error:", err);
     return Response.json(
       { error: err.message || "Failed to process appointment booking" },
       { status: 500 }

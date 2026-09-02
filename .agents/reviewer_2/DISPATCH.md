@@ -1,24 +1,28 @@
-## 2026-08-17T17:02:22Z
-You are Reviewer 2 for the BodiedbyEsh.com Coastal Community Church (#3266) Faith & Fitness Walking and Step Tracker project.
+## 2026-09-02T16:47:52Z
+You are teamwork_preview_reviewer (Frontend & UI Reviewer).
+Working directory: c:\projects\BodiedbyEsh\.agents\reviewer_2
+Project root: c:\projects\BodiedbyEsh
+Original Request: c:\projects\BodiedbyEsh\ORIGINAL_REQUEST.md
+Master Project Plan: c:\projects\BodiedbyEsh\PROJECT.md
+Test Readiness: c:\projects\BodiedbyEsh\TEST_READY.md
 
-Working directory: C:\projects\BodiedbyEsh\.agents\reviewer_2
-Parent conversation ID: 8ee26115-64d8-4399-bfa9-d72abdf93fc3
-Project root: C:\projects\BodiedbyEsh
-
-Your mission is to perform an objective review of the frontend components, design system synergy, safe-area mobile responsiveness, and zero-emoji compliance:
-1. Read C:\projects\BodiedbyEsh\.agents\ORIGINAL_REQUEST.md, PROJECT.md, and TEST_READY.md.
-2. Inspect all components in `src/components/coastal/`:
-   - `CoastalHero.tsx`
-   - `CoastalAuthModal.tsx`
-   - `StepTracker.tsx`
-   - `ScriptureCard.tsx`
-   - `MilestoneModal.tsx`
-   - `GroupProgress.tsx`
-   - `Leaderboard.tsx`
-   - `EncouragementFeed.tsx`
-3. Inspect `src/components/Header.tsx` and `src/components/Footer.tsx` for proper navigation integration.
-4. Verify strict ZERO-EMOJI compliance (must use exclusively Lucide React SVG icons; absolutely no emoji characters in code or copy).
-5. Verify safe-area CSS insets (`.safe-top`, `.safe-bottom`, `.safe-x`) and mobile/tablet/desktop responsive layouts.
-6. Execute `node scripts/run-coastal-tests.mjs`.
-7. Issue an unambiguous verdict: APPROVE or REQUEST_CHANGES in your handoff report.
-8. Write your report to `C:\projects\BodiedbyEsh\.agents\reviewer_2\analysis.md` and `handoff.md`, and notify parent.
+Your Mission:
+1. Examine all frontend routes and components:
+   - `src/app/intake/page.tsx`, `src/app/intake/layout.tsx`
+   - `src/app/intake/park-to-peak/page.tsx`
+   - `src/app/intake/executive-concierge/page.tsx`
+   - `src/app/intake/nutrition-metabolic/page.tsx`
+   - `src/components/intake/*`, `src/hooks/useIntakeDraft.ts`
+   - `src/app/admin/intakes/page.tsx`, `src/components/admin/intakes/*`
+   - `src/app/admin/layout.tsx`
+2. Verify:
+   - 100% Lucide React SVG iconography (0 emojis).
+   - Obsidian Gold Glassmorphism design tokens matching Bodied by Esh style guide.
+   - LocalStorage auto-save & restore mechanics.
+   - Digital signature canvas (`SignaturePad`).
+   - Admin navigation item added to `NAV_ITEMS`.
+3. Run verification commands:
+   - `node scripts/run-intake-tests.mjs`
+   - `npm.cmd run build`
+4. Write your review findings and final verdict (APPROVE or REQUEST_CHANGES) to `c:\projects\BodiedbyEsh\.agents\reviewer_2\handoff.md`.
+5. Send a message to your caller with your verdict.

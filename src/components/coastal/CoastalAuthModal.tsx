@@ -18,6 +18,7 @@ import {
   Check,
 } from "lucide-react";
 import { GroupMember } from "@/types/coastal";
+import { getAuthRedirectUrl } from "@/lib/auth-url";
 
 export interface CoastalAuthModalProps {
   isOpen: boolean;
@@ -95,9 +96,7 @@ export default function CoastalAuthModal({
         const { createBrowserClient } = await import("@supabase/ssr");
         const supabase = createBrowserClient(url, key);
 
-        const redirectUrl = typeof window !== "undefined"
-          ? `${window.location.origin}/coastal?joined=true`
-          : "https://bodiedbyesh.com/coastal";
+        const redirectUrl = getAuthRedirectUrl("/coastal?joined=true");
 
         const { error } = await supabase.auth.signInWithOtp({
           email: email.trim().toLowerCase(),
@@ -153,12 +152,14 @@ export default function CoastalAuthModal({
       if (url && key) {
         const { createBrowserClient } = await import("@supabase/ssr");
         const supabase = createBrowserClient(url, key);
+        const redirectUrl = getAuthRedirectUrl("/coastal?joined=true");
 
         if (mode === "signup") {
           const { data, error } = await supabase.auth.signUp({
             email: email.trim().toLowerCase(),
             password,
             options: {
+              emailRedirectTo: redirectUrl,
               data: {
                 full_name: fullName.trim() || "Faithful Walker",
                 campus,
@@ -168,6 +169,23 @@ export default function CoastalAuthModal({
           });
           if (error) throw error;
           authUser = data.user;
+
+          // If user already exists in Supabase, identities array is returned empty
+          if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+            setErrorMessage(
+              "An account with this email address already exists. Please select the Sign In tab to log in with your password, or use Magic Link."
+            );
+            setIsLoading(false);
+            return;
+          }
+
+          if (data.user && !data.user.email_confirmed_at) {
+            setSuccessMessage(
+              `Registration successful! A verification link has been sent to ${email}. Please check your inbox and verify your email to access Coastal #3266.`
+            );
+            setIsLoading(false);
+            return;
+          }
         } else {
           const { data, error } = await supabase.auth.signInWithPassword({
             email: email.trim().toLowerCase(),

@@ -39,13 +39,17 @@ interface Lead {
 const STATUS_OPTIONS = [
   { value: "new", label: "New", icon: Clock, color: "bg-accent-lime/10 text-accent-lime border-accent-lime/20" },
   { value: "contacted", label: "Contacted", icon: Mail, color: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
-  { value: "enrolled", label: "Enrolled", icon: UserCheck, color: "bg-purple-500/10 text-purple-400 border-purple-500/20" },
-  { value: "archived", label: "Archived", icon: Archive, color: "bg-white/5 text-silver-slate border-white/10" },
+  { value: "enrolled", label: "Enrolled", icon: CheckCircle, color: "bg-purple-500/10 text-purple-400 border-purple-500/20" },
+  { value: "archived", label: "Archived", icon: Clock, color: "bg-white/5 text-silver-slate border-white/10" },
 ];
 
 const PROGRAM_LABELS: Record<string, string> = {
-  track_a: "Park-to-Peak",
-  track_b: "Executive Concierge",
+  track_a: "Track A — Park-to-Peak",
+  track_a_hybrid: "Track A — Hybrid",
+  track_a_park: "Track A — Park Only",
+  track_b: "Track B — Executive Concierge",
+  track_b_hybrid: "Track B — Hybrid",
+  intro_assessment: "Intro Strategy Assessment",
 };
 
 const GOAL_LABELS: Record<string, string> = {
@@ -53,6 +57,16 @@ const GOAL_LABELS: Record<string, string> = {
   fat_loss: "Fat Loss",
   muscle_gain: "Muscle Gain",
   energy: "Energy & Performance",
+};
+
+const STATUS_CONFIG: Record<
+  string,
+  { label: string; bg: string; text: string; border: string }
+> = {
+  new: { label: "New Lead", bg: "bg-blue-500/10", text: "text-blue-400", border: "border-blue-500/30" },
+  contacted: { label: "Contacted", bg: "bg-yellow-500/10", text: "text-yellow-400", border: "border-yellow-500/30" },
+  enrolled: { label: "Enrolled", bg: "bg-accent-lime/10", text: "text-accent-lime", border: "border-accent-lime/30" },
+  archived: { label: "Archived", bg: "bg-white/5", text: "text-silver-slate", border: "border-white/10" },
 };
 
 function formatDate(iso: string) {
@@ -71,7 +85,6 @@ function formatDateTime(iso: string) {
 export default function AdminLeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
-  const { pin } = useAdminPin();
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -116,7 +129,6 @@ export default function AdminLeadsPage() {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-pin": pin,
         },
         body: JSON.stringify({
           clientId,
@@ -151,7 +163,6 @@ export default function AdminLeadsPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-pin": pin,
         },
         body: JSON.stringify({
           name: lead.name,
@@ -189,9 +200,7 @@ export default function AdminLeadsPage() {
   // ─── Phase 2 Workout & Chat Helpers ───
   const fetchClientWorkouts = async (clientId: string) => {
     try {
-      const res = await fetch(`/api/admin/workouts?clientId=${clientId}`, {
-        headers: { "x-admin-pin": pin }
-      });
+      const res = await fetch(`/api/admin/workouts?clientId=${clientId}`);
       const data = await res.json();
       if (data.success) {
         setWorkoutsHistory(data.data || []);
@@ -210,7 +219,6 @@ export default function AdminLeadsPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-pin": pin
         },
         body: JSON.stringify({
           clientId,
@@ -237,7 +245,6 @@ export default function AdminLeadsPage() {
     try {
       const res = await fetch(`/api/admin/workouts?id=${workoutId}`, {
         method: "DELETE",
-        headers: { "x-admin-pin": pin }
       });
       const data = await res.json();
       if (data.success) {
@@ -250,9 +257,7 @@ export default function AdminLeadsPage() {
 
   const fetchClientChat = async (clientId: string) => {
     try {
-      const res = await fetch(`/api/chat?clientId=${clientId}`, {
-        headers: { "x-admin-pin": pin }
-      });
+      const res = await fetch(`/api/chat?clientId=${clientId}`);
       const data = await res.json();
       if (data.success) {
         setChatMessages(data.data || []);
@@ -283,7 +288,6 @@ export default function AdminLeadsPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-pin": pin
         },
         body: JSON.stringify({
           message: text,
@@ -396,15 +400,12 @@ export default function AdminLeadsPage() {
   };
 
   useEffect(() => {
-    if (pin) {
-      fetchLeads();
-    }
-  }, [pin]);
+    fetchLeads();
+  }, []);
 
   async function fetchLeads() {
     try {
       const res = await fetch("/api/admin/leads", {
-        headers: { "x-admin-pin": pin },
         cache: "no-store",
       });
       const data = await res.json();
@@ -426,7 +427,6 @@ export default function AdminLeadsPage() {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-pin": pin,
         },
         body: JSON.stringify({ id: leadId, status: newStatus }),
       });

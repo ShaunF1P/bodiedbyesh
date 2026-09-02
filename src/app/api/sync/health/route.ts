@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { logSteps, getUserStreak, calculateMileage, calculateActiveMinutes, calculateCalories } from "@/lib/coastal/db";
+import { logSteps, getUserStreak, calculateMileage, calculateActiveMinutes, calculateCalories, getLocalISODate } from "@/lib/coastal/db";
+import { requireUserSession } from "@/lib/auth/user";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
+import { validateRequestBody } from "@/lib/validation/api-validator";
+import { SyncHealthPostSchema } from "@/lib/validation/schemas";
 
 export type HealthProvider =
   | "apple_health"
@@ -12,52 +16,32 @@ export type HealthProvider =
   | "whoop"
   | "device_motion";
 
-interface SyncPayload {
-  provider: HealthProvider;
-  userId?: string;
-  groupId?: string;
-  date?: string; // YYYY-MM-DD
-  steps: number;
-  distanceMiles?: number;
-  activeMinutes?: number;
-  caloriesBurned?: number;
-  deviceModel?: string;
-  sourceApp?: string;
-  rawPayload?: any;
-}
-
-async function getAuthUser(request: NextRequest) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) return null;
-
-  try {
-    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll() {},
-      },
-    });
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    return user ? { user, supabase } : null;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * POST /api/sync/health
  * Auto-sync endpoint for Apple Health, Google Health/Fit, Fitbit, Garmin, and Device Motion Pedometer
  */
 export async function POST(request: NextRequest) {
+  // ── Rate Limiting (30 requests/minute per IP) ──────────────────────────
+  const rateLimit = checkRateLimit(request, "auth");
+  if (!rateLimit.success) {
+    return rateLimitResponse(rateLimit);
+  }
+
+  // ── Strict Session Authentication (Anti-Spoofing) ─────────────────────
+  const { user, error: authError, supabase } = await requireUserSession(request);
+  if (authError || !user) {
+    return authError || NextResponse.json(
+      { success: false, error: "Unauthorized: Active user session required" },
+      { status: 401 }
+    );
+  }
+
+  const validation = await validateRequestBody(request, SyncHealthPostSchema);
+  if (!validation.success) {
+    return validation.response;
+  }
+
   try {
-    const body: SyncPayload = await request.json();
     const {
       provider,
       steps,
@@ -67,25 +51,11 @@ export async function POST(request: NextRequest) {
       groupId = "3266-coastal-church",
       deviceModel,
       sourceApp,
-    } = body;
+    } = validation.data;
 
-    if (steps === undefined || steps === null || typeof steps !== "number") {
-      return NextResponse.json(
-        { success: false, error: "Valid numeric step count is required." },
-        { status: 400 }
-      );
-    }
-
-    if (steps < 0 || steps > 200000) {
-      return NextResponse.json(
-        { success: false, error: "Step count must be between 0 and 200,000 steps." },
-        { status: 400 }
-      );
-    }
-
-    const auth = await getAuthUser(request);
-    const userId = auth?.user?.id || body.userId || "guest-user";
-    const logDate = date || new Date().toISOString().split("T")[0];
+    // Derive userId exclusively from authenticated user session
+    const userId = user.id;
+    const logDate = date || getLocalISODate();
 
     const computedMiles = distanceMiles ?? calculateMileage(steps);
     const computedMinutes = activeMinutes ?? calculateActiveMinutes(steps);
@@ -102,7 +72,7 @@ export async function POST(request: NextRequest) {
       device_motion: "Live Device Pedometer Sensor",
     };
 
-    const notes = `Auto-synced via ${providerLabels[provider] || provider}${
+    const notes = `Auto-synced via ${providerLabels[provider as HealthProvider] || provider}${
       deviceModel ? ` (${deviceModel})` : ""
     }${sourceApp ? ` via ${sourceApp}` : ""}`;
 
@@ -114,17 +84,20 @@ export async function POST(request: NextRequest) {
         steps,
         distanceMiles: computedMiles,
         activeMinutes: computedMinutes,
+        source: provider || "manual",
         notes,
       },
-      auth?.supabase
+      supabase ?? undefined
     );
 
-    const streak = await getUserStreak(userId, groupId, auth?.supabase);
+    const streak = await getUserStreak(userId, groupId, supabase ?? undefined);
+
+    logger.info(`[health-sync] Synced ${steps} steps for user ${userId.slice(0, 8)}*** via ${provider}`);
 
     return NextResponse.json({
       success: true,
       message: `Successfully synchronized ${steps.toLocaleString()} steps from ${
-        providerLabels[provider] || provider
+        providerLabels[provider as HealthProvider] || provider
       }.`,
       data: {
         provider,
@@ -141,7 +114,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error: any) {
-    console.error("Health sync endpoint error:", error);
+    logger.error("Health sync endpoint error:", error);
     return NextResponse.json(
       { success: false, error: error.message || "Failed to process health sync." },
       { status: 500 }
@@ -153,7 +126,7 @@ export async function POST(request: NextRequest) {
  * GET /api/sync/health
  * Returns connection statuses for supported health platforms
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   return NextResponse.json({
     success: true,
     supportedProviders: [

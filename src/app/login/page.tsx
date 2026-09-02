@@ -3,6 +3,7 @@ import React, { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { getAuthRedirectUrl } from "@/lib/auth-url";
 import { Lock, Mail, User, ShieldCheck, Loader2, AlertTriangle } from "lucide-react";
 import Logo from "@/components/Logo";
 
@@ -45,7 +46,7 @@ function LoginContent() {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/dashboard`,
+            emailRedirectTo: getAuthRedirectUrl("/dashboard"),
             data: {
               full_name: name.trim(),
             },

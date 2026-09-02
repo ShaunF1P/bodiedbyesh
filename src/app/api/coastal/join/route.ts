@@ -1,61 +1,52 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
 import { joinGroup, getGroup } from "@/lib/coastal/db";
-
-async function getAuthUser(request: NextRequest) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) return null;
-
-  try {
-    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll() {
-          // No-op in route handler
-        },
-      },
-    });
-
-    const { data: { user } } = await supabase.auth.getUser();
-    return user ? { user, supabase } : null;
-  } catch {
-    return null;
-  }
-}
+import { requireUserSession } from "@/lib/auth/user";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
+import { validateRequestBody } from "@/lib/validation/api-validator";
+import { CoastalJoinGroupSchema } from "@/lib/validation/schemas";
 
 /**
  * POST /api/coastal/join
- * Join Coastal Community Church (#3266) Walking Group
+ * Join Coastal Community Church (#3266) Walking Group (Strict session authentication required)
  */
 export async function POST(request: NextRequest) {
+  // ── Rate Limiting (5 requests/minute per IP) ──────────────────────────
+  const rateLimit = checkRateLimit(request, "form");
+  if (!rateLimit.success) {
+    return rateLimitResponse(rateLimit);
+  }
+
+  // ── Strict Session Authentication (Anti-Spoofing) ─────────────────────
+  const { user, error: authError, supabase } = await requireUserSession(request);
+  if (authError || !user) {
+    return authError || NextResponse.json(
+      { success: false, error: "Unauthorized: Active user session required" },
+      { status: 401 }
+    );
+  }
+
+  const validation = await validateRequestBody(request, CoastalJoinGroupSchema);
+  if (!validation.success) {
+    return validation.response;
+  }
+
   try {
-    const body = await request.json().catch(() => ({}));
-    const { groupSlug, displayName, isAnonymous } = body;
+    const { groupSlug, displayName, isAnonymous } = validation.data;
 
-    const auth = await getAuthUser(request);
-    const userId = auth?.user?.id || body.userId;
-
-    if (!userId) {
-      return NextResponse.json(
-        { success: false, error: "Authentication or user ID is required to join" },
-        { status: 401 }
-      );
-    }
+    // Derive userId strictly from authenticated session
+    const userId = user.id;
 
     const resolvedSlug = groupSlug || "coastal";
     const resolvedName =
-      displayName || auth?.user?.user_metadata?.full_name || "Faithful Walker";
+      displayName || user.user_metadata?.full_name || "Faithful Walker";
 
     const result = await joinGroup(
       userId,
       resolvedSlug,
       resolvedName,
       Boolean(isAnonymous),
-      auth?.supabase
+      supabase ?? undefined
     );
 
     if (!result.success) {
@@ -65,7 +56,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const group = await getGroup(resolvedSlug, auth?.supabase);
+    const group = await getGroup(resolvedSlug, supabase ?? undefined);
+
+    logger.info(`[coastal-join] User ${userId.slice(0, 8)}*** joined group ${resolvedSlug}`);
 
     return NextResponse.json({
       success: true,
@@ -76,6 +69,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error: any) {
+    logger.error("Internal group join error:", error);
     return NextResponse.json(
       { success: false, error: error.message || "Internal server error" },
       { status: 500 }

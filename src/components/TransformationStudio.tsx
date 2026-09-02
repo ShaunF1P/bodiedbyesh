@@ -21,6 +21,7 @@ import {
   Activity,
   ShieldCheck,
   Zap,
+  X,
 } from "lucide-react";
 
 export interface TransformationEntry {
@@ -404,8 +405,9 @@ export default function TransformationStudio({
               <button
                 onClick={() => setIsLogModalOpen(false)}
                 className="text-silver-slate hover:text-white p-1 cursor-pointer"
+                aria-label="Close modal"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 

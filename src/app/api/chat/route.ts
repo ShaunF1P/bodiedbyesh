@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
-import { createServerClient } from "@supabase/ssr";
+import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
+import { validateRequestBody, validateQueryParams } from "@/lib/validation/api-validator";
+import { ChatGetQuerySchema, ChatSendMessageSchema } from "@/lib/validation/schemas";
 
 function getServiceRoleSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -11,66 +13,51 @@ function getServiceRoleSupabase() {
   return createClient(url, key);
 }
 
-// Helper to authenticate admin PIN
-function verifyAdmin(request: NextRequest) {
-  const authHeader = request.headers.get("x-admin-pin");
-  const adminPin = process.env.ADMIN_PIN || "0408";
-  return authHeader === adminPin || authHeader === "bodiedbyesh";
-}
-
 // GET — Retrieve chat message history
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const clientIdParam = searchParams.get("clientId");
-
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !supabaseAnonKey) {
-      return Response.json({ error: "Supabase not configured" }, { status: 500 });
+    const queryValidation = validateQueryParams(
+      request.nextUrl.searchParams,
+      ChatGetQuerySchema
+    );
+    if (!queryValidation.success) {
+      return queryValidation.response;
     }
 
-    // Attempt client session auth first
-    const clientSupabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          // No-op
-        },
-      },
-    });
+    const { clientId: clientIdParam } = queryValidation.data;
 
-    const { data: { user } } = await clientSupabase.auth.getUser();
+    const clientSupabase = await createServerSupabase();
+    const { data: { user }, error: authError } = await clientSupabase.auth.getUser();
+
+    if (authError || !user) {
+      return Response.json({ error: "Unauthorized access: Missing authentication" }, { status: 401 });
+    }
 
     let targetClientId: string | null = null;
-    let isAdminCall = false;
+    const isAdmin = user.app_metadata?.role === "admin";
 
-    // Check if this is an admin request
-    if (verifyAdmin(request)) {
-      isAdminCall = true;
-      targetClientId = clientIdParam;
-    } else if (user) {
-      // Get the profile ID associated with the user's email
+    if (isAdmin) {
+      targetClientId = clientIdParam || null;
+    } else {
+      // Get the profile ID associated with the authenticated user
       const { data: profile } = await clientSupabase
         .from("client_profiles")
         .select("id")
         .eq("email", user.email)
-        .single();
-      
+        .maybeSingle();
+
       if (profile) {
         targetClientId = profile.id;
       }
     }
 
     if (!targetClientId) {
-      return Response.json({ error: "Unauthorized access: Missing authentication" }, { status: 401 });
+      return Response.json({ error: "Client profile not found" }, { status: 404 });
     }
 
     // Fetch message history
     // Admin uses service role; Client uses client session
-    const supabase = isAdminCall ? getServiceRoleSupabase() : clientSupabase;
+    const supabase = isAdmin ? getServiceRoleSupabase() : clientSupabase;
 
     const { data: messages, error } = await supabase
       .from("chat_messages")
@@ -91,49 +78,35 @@ export async function GET(request: NextRequest) {
 // POST — Send a new chat message
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { message, clientId } = body;
-
-    if (!message) {
-      return Response.json({ error: "message is required" }, { status: 400 });
+    const validation = await validateRequestBody(request, ChatSendMessageSchema);
+    if (!validation.success) {
+      return validation.response;
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !supabaseAnonKey) {
-      return Response.json({ error: "Supabase not configured" }, { status: 500 });
+    const { message, clientId } = validation.data;
+
+    const clientSupabase = await createServerSupabase();
+    const { data: { user }, error: authError } = await clientSupabase.auth.getUser();
+
+    if (authError || !user) {
+      return Response.json({ error: "Unauthorized access: Missing authentication" }, { status: 401 });
     }
-
-    const clientSupabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          // No-op
-        },
-      },
-    });
-
-    const { data: { user } } = await clientSupabase.auth.getUser();
 
     let targetClientId: string | null = null;
     let sender: "client" | "coach" | null = null;
-    let isAdminCall = false;
+    const isAdmin = user.app_metadata?.role === "admin";
 
-    // Check if this is an admin request
-    if (verifyAdmin(request)) {
-      isAdminCall = true;
-      targetClientId = clientId;
+    if (isAdmin) {
+      targetClientId = clientId || null;
       sender = "coach";
-    } else if (user) {
-      // Get the profile ID associated with the user's email
+    } else {
+      // Get the profile ID associated with the user
       const { data: profile } = await clientSupabase
         .from("client_profiles")
         .select("id")
         .eq("email", user.email)
-        .single();
-      
+        .maybeSingle();
+
       if (profile) {
         targetClientId = profile.id;
         sender = "client";
@@ -141,11 +114,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (!targetClientId || !sender) {
-      return Response.json({ error: "Unauthorized access: Missing authentication" }, { status: 401 });
+      return Response.json({ error: "Client profile not found" }, { status: 404 });
     }
 
     // Insert message into Supabase
-    const supabase = isAdminCall ? getServiceRoleSupabase() : clientSupabase;
+    const supabase = isAdmin ? getServiceRoleSupabase() : clientSupabase;
 
     const { data: insertedMsg, error } = await supabase
       .from("chat_messages")

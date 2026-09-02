@@ -1,3 +1,6 @@
+import { logger, maskPhone } from "@/lib/logger";
+import { fetchWithTimeout } from "@/lib/http/safe-fetch";
+
 /**
  * Lightweight SMS Utility using Twilio API.
  * Uses native fetch to avoid extra package dependencies.
@@ -16,7 +19,7 @@ export async function sendSMS({
   if (sid && token && from && !sid.includes("placeholder")) {
     try {
       const auth = Buffer.from(`${sid}:${token}`).toString("base64");
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
         {
           method: "POST",
@@ -29,28 +32,31 @@ export async function sendSMS({
             From: from,
             Body: body,
           }),
-        }
+        },
+        8000
       );
 
       if (response.ok) {
-        console.log(`[SMS] Successfully sent SMS to ${to} via Twilio.`);
+        logger.info(`[SMS] Successfully sent SMS to ${maskPhone(to)} via Twilio.`);
         return true;
       } else {
         const errorText = await response.text();
-        console.error(`[SMS] Twilio API returned error status ${response.status}: ${errorText}`);
+        logger.error(`[SMS] Twilio API returned error status ${response.status}: ${errorText}`);
       }
     } catch (err) {
-      console.error("[SMS] Exception encountered sending SMS via Twilio:", err);
+      logger.error("[SMS] Exception encountered sending SMS via Twilio:", err);
     }
   }
 
   // Fallback simulator for development
-  console.log(`
-==================================================
-[SIMULATED SMS SENT]
-To: ${to}
-Body: ${body}
-==================================================
-  `);
+  if (process.env.NODE_ENV === "production") {
+    logger.info(`[SMS Simulator] Dispatched SMS to ${maskPhone(to)}`);
+  } else {
+    logger.info(`[SIMULATED SMS SENT] To: ${maskPhone(to)}`, {
+      recipient: maskPhone(to),
+      bodyLength: body.length,
+      suppressInProd: true,
+    });
+  }
   return true;
 }

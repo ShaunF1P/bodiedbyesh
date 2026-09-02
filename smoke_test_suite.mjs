@@ -82,24 +82,26 @@ export async function runAllSmokeTests() {
     }),
   }));
 
-  // 3. Admin Security PIN Barrier & Endpoints
-  console.log(`\n--- [3/4] Testing Admin Security Barrier & CRM APIs ---`);
-  // Expect 401 Unauthorized without PIN
-  results.push(await testEndpoint('Admin Leads Unauthorized (GET)', '/api/admin/leads', {
+  // 3. Admin Security Barrier & Hardened Ingress Endpoints
+  console.log(`\n--- [3/4] Testing Admin Security Barrier & Hardened Ingress Endpoints ---`);
+  // Verify 401 Unauthorized barrier on unauthenticated administrative endpoints
+  results.push(await testEndpoint('Admin Leads Unauthorized Barrier (GET)', '/api/admin/leads', {
     expectedStatus: 401,
   }));
-  // Expect 200 with correct PIN
-  results.push(await testEndpoint('Admin Leads Authorized (GET)', '/api/admin/leads', {
-    headers: { 'x-admin-pin': '0408' },
-    expectedStatus: 200,
+  results.push(await testEndpoint('Admin Client Profile Unauthorized Barrier (GET)', '/api/admin/client-profile?email=test@example.com', {
+    expectedStatus: 401,
   }));
-  // Admin Client Profile endpoint
-  results.push(await testEndpoint('Admin Client Profile Lookup (GET)', '/api/admin/client-profile?email=test@example.com&pin=0408', {
-    headers: { 'x-admin-pin': '0408' },
+  results.push(await testEndpoint('Admin Workouts Feed Unauthorized Barrier (GET)', '/api/admin/workouts?clientId=00000000-0000-0000-0000-000000000000', {
+    expectedStatus: 401,
   }));
-  // Admin Workouts endpoint (requires clientId UUID)
-  results.push(await testEndpoint('Admin Workouts Feed (GET)', '/api/admin/workouts?clientId=00000000-0000-0000-0000-000000000000', {
-    headers: { 'x-admin-pin': '0408' },
+  results.push(await testEndpoint('Meal Log BOLA Unauthorized Barrier (GET)', '/api/log-meal?email=victim@example.com', {
+    expectedStatus: 401,
+  }));
+  results.push(await testEndpoint('Stripe Checkout Invalid Program Barrier (POST)', '/api/create-checkout-session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ programChoice: 'invalid_tier_injection', priceId: 'price_fake_123' }),
+    expectedStatus: 400,
   }));
 
   // 4. Health Tracker Auto-Sync & Client Core APIs

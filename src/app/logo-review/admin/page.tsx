@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Lock, Database, Trash2, Clipboard, AlertCircle, RefreshCw, MessageSquare, Star, Heart, Sun, Moon, Users, Phone, Mail, X } from "lucide-react";
+import { Lock, Database, Trash2, Clipboard, AlertCircle, RefreshCw, MessageSquare, Star, Heart, Sun, Moon, Users, Phone, Mail, X, Loader2 } from "lucide-react";
 import { LOGO_OPTIONS } from "@/lib/logos";
+import { createClient } from "@/lib/supabase/client";
 
 interface FeedbackEntry {
   id: string;
@@ -103,10 +104,12 @@ function parseHeartsAndHidden(entry: any) {
 
 
 export default function LogoAdmin() {
+  const supabase = createClient();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [pin, setPin] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [feedbackList, setFeedbackList] = useState<FeedbackEntry[]>([]);
   const [sqlInstructions, setSqlInstructions] = useState<string | null>(null);
   const [showOnlyFinalists, setShowOnlyFinalists] = useState(false);
@@ -119,30 +122,61 @@ export default function LogoAdmin() {
   const [leadsSqlInstructions, setLeadsSqlInstructions] = useState<string | null>(null);
 
   useEffect(() => {
-    const savedPin = sessionStorage.getItem("logo_admin_pin");
-    if (savedPin) {
-      setPin(savedPin);
-      fetchFeedback(savedPin);
+    async function checkAuth() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && user.app_metadata?.role === "admin") {
+          setIsAuthenticated(true);
+          await Promise.all([fetchFeedback(), fetchLeads()]);
+        }
+      } catch (err) {
+        console.error("Auth check failed:", err);
+      } finally {
+        setLoading(false);
+      }
     }
+    checkAuth();
   }, []);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    fetchFeedback(pin);
+    setLoading(true);
+    setError("");
+
+    try {
+      const { data, error: signInErr } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+
+      if (signInErr || !data.user) {
+        setError(signInErr?.message || "Invalid credentials");
+        setLoading(false);
+        return;
+      }
+
+      if (data.user.app_metadata?.role !== "admin") {
+        setError("Access Denied: Administrator role required.");
+        setLoading(false);
+        return;
+      }
+
+      setIsAuthenticated(true);
+      await Promise.all([fetchFeedback(), fetchLeads()]);
+    } catch (err: any) {
+      setError(err.message || "Failed to authenticate");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const fetchLeads = async (enteredPin: string) => {
+  const fetchLeads = async () => {
     setLeadsLoading(true);
     setLeadsError("");
     setLeadsSqlInstructions(null);
 
     try {
-      const response = await fetch("/api/admin/leads", {
-        headers: {
-          "x-admin-pin": enteredPin
-        }
-      });
-
+      const response = await fetch("/api/admin/leads");
       const result = await response.json();
 
       if (response.ok) {
@@ -161,47 +195,33 @@ export default function LogoAdmin() {
     }
   };
 
-  const fetchFeedback = async (enteredPin: string) => {
-    setLoading(true);
+  const fetchFeedback = async () => {
     setError("");
     setSqlInstructions(null);
 
     try {
-      const response = await fetch("/api/logo-feedback", {
-        headers: {
-          "x-admin-pin": enteredPin
-        }
-      });
-
+      const response = await fetch("/api/logo-feedback");
       const result = await response.json();
 
       if (response.ok) {
         setFeedbackList(result.data || []);
-        setIsAuthenticated(true);
-        sessionStorage.setItem("logo_admin_pin", enteredPin);
-        fetchLeads(enteredPin);
       } else {
         if (response.status === 501 && result.sql) {
-          // Table doesn't exist error
           setSqlInstructions(result.sql);
-          setIsAuthenticated(true);
-          sessionStorage.setItem("logo_admin_pin", enteredPin);
-          fetchLeads(enteredPin);
         } else {
-          setError(result.error || "Invalid PIN or Passcode");
+          setError(result.error || "Failed to fetch feedback");
         }
       }
     } catch (err) {
       setError("Failed to connect to the server.");
-    } finally {
-      setLoading(false);
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setIsAuthenticated(false);
-    setPin("");
-    sessionStorage.removeItem("logo_admin_pin");
+    setEmail("");
+    setPassword("");
     setFeedbackList([]);
     setLeadsList([]);
     setSqlInstructions(null);
@@ -223,19 +243,41 @@ export default function LogoAdmin() {
             </div>
             <h1 className="font-display font-bold text-2xl tracking-tight mb-2">Admin Dashboard</h1>
             <p className="text-silver-slate text-sm font-light">
-              Enter your Admin PIN or Page Passcode to view client brand feedback.
+              Sign in with your verified administrator credentials to view brand feedback.
             </p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
+              <label className="text-xs font-semibold text-silver-slate uppercase tracking-wider block mb-1">
+                Email
+              </label>
+              <input
+                type="email"
+                required
+                placeholder="admin@bodiedbyesh.com"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setError("");
+                }}
+                className="w-full bg-[#0A0A10] border border-white/10 focus:border-accent-lime rounded-xl px-4 py-3 text-sm focus:outline-none transition-all text-left"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-silver-slate uppercase tracking-wider block mb-1">
+                Password
+              </label>
               <input
                 type="password"
                 required
-                placeholder="Enter Admin PIN"
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                className="w-full bg-[#0A0A10] border border-white/10 focus:border-accent-lime rounded-xl px-4 py-3 text-sm focus:outline-none transition-all text-center"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setError("");
+                }}
+                className="w-full bg-[#0A0A10] border border-white/10 focus:border-accent-lime rounded-xl px-4 py-3 text-sm focus:outline-none transition-all text-left"
               />
               {error && (
                 <p className="text-red-400 text-xs text-center mt-2 font-medium">
@@ -248,7 +290,14 @@ export default function LogoAdmin() {
               disabled={loading}
               className="w-full inline-flex items-center justify-center bg-accent-lime text-cyber-slate font-bold uppercase tracking-wider text-xs py-3 rounded-xl hover:bg-accent-lime/90 transition-all cursor-pointer shadow-lg shadow-accent-lime/10 disabled:opacity-50"
             >
-              {loading ? "Authenticating..." : "Access Portal"}
+              {loading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
+                  <span>Authenticating...</span>
+                </>
+              ) : (
+                "Access Portal"
+              )}
             </button>
           </form>
         </div>
@@ -268,7 +317,8 @@ export default function LogoAdmin() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => {
-                fetchFeedback(pin);
+                fetchFeedback();
+                fetchLeads();
               }}
               className="p-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
               title="Refresh Data"

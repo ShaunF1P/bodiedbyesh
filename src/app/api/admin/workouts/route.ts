@@ -1,5 +1,12 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireAdminSession } from "@/lib/auth/admin";
+import { validateRequestBody, validateQueryParams } from "@/lib/validation/api-validator";
+import {
+  AdminWorkoutGetQuerySchema,
+  AdminWorkoutCreateSchema,
+  AdminWorkoutDeleteQuerySchema,
+} from "@/lib/validation/schemas";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -10,28 +17,23 @@ function getSupabase() {
   return createClient(url, key);
 }
 
-// Helper to authenticate admin PIN
-function verifyAdmin(request: NextRequest) {
-  const authHeader = request.headers.get("x-admin-pin");
-  const adminPin = process.env.ADMIN_PIN || "0408";
-  return authHeader === adminPin || authHeader === "bodiedbyesh";
-}
-
 // GET — Fetch workouts for a client on a specific date
 export async function GET(request: NextRequest) {
   try {
-    if (!verifyAdmin(request)) {
-      return Response.json({ error: "Unauthorized access" }, { status: 401 });
+    const { error: authError } = await requireAdminSession(request);
+    if (authError) {
+      return authError;
     }
 
-    const { searchParams } = new URL(request.url);
-    const clientId = searchParams.get("clientId");
-    const date = searchParams.get("date");
-
-    if (!clientId) {
-      return Response.json({ error: "clientId is required" }, { status: 400 });
+    const queryValidation = validateQueryParams(
+      request.nextUrl.searchParams,
+      AdminWorkoutGetQuerySchema
+    );
+    if (!queryValidation.success) {
+      return queryValidation.response;
     }
 
+    const { clientId, date } = queryValidation.data;
     const supabase = getSupabase();
 
     let query = supabase
@@ -61,20 +63,17 @@ export async function GET(request: NextRequest) {
 // POST — Create or replace a workout for a client on a specific date
 export async function POST(request: NextRequest) {
   try {
-    if (!verifyAdmin(request)) {
-      return Response.json({ error: "Unauthorized access" }, { status: 401 });
+    const { error: authError } = await requireAdminSession(request);
+    if (authError) {
+      return authError;
     }
 
-    const body = await request.json();
-    const { clientId, date, workoutName, notes, exercises } = body;
-
-    if (!clientId || !date || !workoutName || !Array.isArray(exercises)) {
-      return Response.json(
-        { error: "clientId, date, workoutName, and exercises (array) are required" },
-        { status: 400 }
-      );
+    const validation = await validateRequestBody(request, AdminWorkoutCreateSchema);
+    if (!validation.success) {
+      return validation.response;
     }
 
+    const { clientId, date, workoutName, notes, exercises } = validation.data;
     const supabase = getSupabase();
 
     // 1. Delete existing workouts for this client on this date
@@ -96,7 +95,7 @@ export async function POST(request: NextRequest) {
         client_id: clientId,
         date,
         name: workoutName,
-        notes,
+        notes: notes || null,
       })
       .select()
       .single();
@@ -107,7 +106,7 @@ export async function POST(request: NextRequest) {
 
     // 3. Insert exercises
     if (exercises.length > 0) {
-      const exerciseRecords = exercises.map((ex: any, idx: number) => ({
+      const exerciseRecords = exercises.map((ex, idx: number) => ({
         workout_id: workout.id,
         exercise_name: ex.exerciseName,
         target_sets: ex.targetSets || 3,
@@ -148,17 +147,20 @@ export async function POST(request: NextRequest) {
 // DELETE — Remove a workout
 export async function DELETE(request: NextRequest) {
   try {
-    if (!verifyAdmin(request)) {
-      return Response.json({ error: "Unauthorized access" }, { status: 401 });
+    const { error: authError } = await requireAdminSession(request);
+    if (authError) {
+      return authError;
     }
 
-    const { searchParams } = new URL(request.url);
-    const workoutId = searchParams.get("id");
-
-    if (!workoutId) {
-      return Response.json({ error: "workoutId (id) is required" }, { status: 400 });
+    const queryValidation = validateQueryParams(
+      request.nextUrl.searchParams,
+      AdminWorkoutDeleteQuerySchema
+    );
+    if (!queryValidation.success) {
+      return queryValidation.response;
     }
 
+    const { id: workoutId } = queryValidation.data;
     const supabase = getSupabase();
 
     const { error } = await supabase

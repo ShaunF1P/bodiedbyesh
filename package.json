@@ -6,7 +6,16 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node scripts/run-m1-security-tests.mjs && node scripts/run-m2-sre-tests.mjs && node scripts/run-m3-architecture-tests.mjs && node scripts/run-smoke-test.mjs && node scripts/run-coastal-tests.mjs && node scripts/run-prr-audit-suite.mjs",
+    "test:prr": "node scripts/run-prr-audit-suite.mjs",
+    "test:m1": "node scripts/run-m1-security-tests.mjs",
+    "test:m2": "node scripts/run-m2-sre-tests.mjs",
+    "test:m3": "node scripts/run-m3-architecture-tests.mjs",
+    "test:smoke": "node smoke_test_suite.mjs",
+    "test:coastal": "node scripts/run-coastal-tests.mjs",
+    "test:static": "node scripts/run-smoke-test.mjs",
+    "test:e2e": "node tests/playwright_health_sync.mjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -18,7 +27,8 @@
     "next": "16.2.9",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "stripe": "^22.2.3"
+    "stripe": "^22.2.3",
+    "zod": "^4.5.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

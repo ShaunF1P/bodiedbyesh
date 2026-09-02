@@ -1,53 +1,43 @@
-# E2E Test Infra: Coastal Community Church (#3266) Faith & Fitness Walking Portal
+# E2E Test Infra: Bodied by Esh Digital Clinical Client Intake System
 
 ## Test Philosophy
-- Opaque-box, requirement-driven testing covering all 31 features (F01–F31).
-- 4-Tier Test Matrix: Category-Partition (Tier 1), Boundary Value Analysis (Tier 2), Cross-Feature Interactions (Tier 3), Real-World Workload Scenarios (Tier 4).
-- Verification mechanisms validate UI components, data structures, calculators, RLS security contracts, and Next.js build compilation.
+- **Opaque-box, requirement-driven**: Exercise all intake routes, coach hub, draft auto-save, API ingress, rate limiting, and admin review portal strictly as an end user / client / coach.
+- **Methodology**: Category-Partition + Boundary Value Analysis (BVA) + Pairwise Combinatorial Testing + Real-World Workloads.
+- **Zero Emoji AST Enforcer**: Static scan ensuring 100% compliance with Global Rule 1 (0 Unicode/AI emojis, 100% Lucide React SVGs).
 
-## Feature Inventory Coverage
-| # | Feature ID | Name | Tier 1 (>=5) | Tier 2 (>=5) | Tier 3 (Pairwise) | Tier 4 (Workload) |
-|---|------------|------|:------------:|:------------:|:-----------------:|:-----------------:|
-| 1 | F01 | Dedicated Route `/coastal` | 5 | 5 | ✓ | ✓ |
-| 2 | F02 | Route Alias `/coastal-walk` | 5 | 5 | ✓ | ✓ |
-| 3 | F03 | Seamless Onboarding Modal | 5 | 5 | ✓ | ✓ |
-| 4 | F04 | Group #3266 Auto-Association | 5 | 5 | ✓ | ✓ |
-| 5 | F05 | Guest Preview Mode | 5 | 5 | ✓ | ✓ |
-| 6 | F06 | Daily Step Logging | 5 | 5 | ✓ | ✓ |
-| 7 | F07 | Mileage Calculation | 5 | 5 | ✓ | ✓ |
-| 8 | F08 | Active Walking Time Engine | 5 | 5 | ✓ | ✓ |
-| 9 | F09 | Daily & Historical Log History | 5 | 5 | ✓ | ✓ |
-| 10 | F10 | Walking Streak Counter | 5 | 5 | ✓ | ✓ |
-| 11 | F11 | Supabase Step Logs RLS | 5 | 5 | ✓ | ✓ |
-| 12 | F12 | 14-Day "Walking by Faith" Curriculum | 5 | 5 | ✓ | ✓ |
-| 13 | F13 | Daily Devotional Rotation Engine | 5 | 5 | ✓ | ✓ |
-| 14 | F14 | Interactive Reflection Journal | 5 | 5 | ✓ | ✓ |
-| 15 | F15 | Individual Faith Milestone Badges | 5 | 5 | ✓ | ✓ |
-| 16 | F16 | Milestone Unlock Notifications | 5 | 5 | ✓ | ✓ |
-| 17 | F17 | Communal Faith Journey Engine | 5 | 5 | ✓ | ✓ |
-| 18 | F18 | Real-Time Group Progress Bar | 5 | 5 | ✓ | ✓ |
-| 19 | F19 | Community Leaderboard | 5 | 5 | ✓ | ✓ |
-| 20 | F20 | Encouragement & Prayer Wall | 5 | 5 | ✓ | ✓ |
-| 21 | F21 | SVG Encouragement Reactions | 5 | 5 | ✓ | ✓ |
-| 22 | F22 | Supabase Database Schema | 5 | 5 | ✓ | ✓ |
-| 23 | F23 | Secure Aggregate RPC Functions | 5 | 5 | ✓ | ✓ |
-| 24 | F24 | Coastal Backend API Routes | 5 | 5 | ✓ | ✓ |
-| 25 | F25 | Supabase Client/Server Service Layer | 5 | 5 | ✓ | ✓ |
-| 26 | F26 | Obsidian Gold & Coastal Dark Theme | 5 | 5 | ✓ | ✓ |
-| 27 | F27 | Safe-Area Responsive Mobile Layout | 5 | 5 | ✓ | ✓ |
-| 28 | F28 | Zero-Emoji Lucide SVG Compliance | 5 | 5 | ✓ | ✓ |
-| 29 | F29 | Global Header & Navigation Integration | 5 | 5 | ✓ | ✓ |
-| 30 | F30 | 4-Tier Test Suite & Test Runner | 5 | 5 | ✓ | ✓ |
-| 31 | F31 | Production Build Stability | 5 | 5 | ✓ | ✓ |
+## Feature Inventory & Test Coverage
+| # | Feature | Requirement | Tier 1 (Coverage) | Tier 2 (Boundary) | Tier 3 (Cross-Feature) | Tier 4 (Workload) |
+|---|---------|-------------|:-----------------:|:-----------------:|:----------------------:|:-----------------:|
+| 1 | Track A (`/intake/park-to-peak`) | ORIGINAL_REQUEST §R1 | 5 tests | 5 tests | Pairwise | Scenario 1 |
+| 2 | Track B (`/intake/executive-concierge`) | ORIGINAL_REQUEST §R1 | 5 tests | 5 tests | Pairwise | Scenario 2 |
+| 3 | Track C (`/intake/nutrition-metabolic`) | ORIGINAL_REQUEST §R1 | 5 tests | 5 tests | Pairwise | Scenario 3 |
+| 4 | Coach Hub (`/intake`) | ORIGINAL_REQUEST §R1 | 5 tests | 5 tests | Pairwise | Scenario 4 |
+| 5 | LocalStorage Draft Engine | ORIGINAL_REQUEST §R1 | 5 tests | 5 tests | Pairwise | Scenario 5 |
+| 6 | Ingress API `POST /api/intake` | ORIGINAL_REQUEST §R2 | 5 tests | 5 tests | Pairwise | Scenario 1-3 |
+| 7 | Sliding-Window Rate Limiter | ORIGINAL_REQUEST §R2 | 5 tests | 5 tests | Pairwise | Scenario 6 |
+| 8 | Admin API `GET /api/intake` | ORIGINAL_REQUEST §R2 | 5 tests | 5 tests | Pairwise | Scenario 4 |
+| 9 | Admin Portal (`/admin/intakes`) | ORIGINAL_REQUEST §R3 | 5 tests | 5 tests | Pairwise | Scenario 4 |
+| 10 | Static Design & Zero Emoji Gate | ORIGINAL_REQUEST §R4 | 5 tests | 5 tests | Pairwise | All Scenarios |
 
 ## Test Architecture
-- **Test Runner Location**: `scripts/run-coastal-tests.mjs` (or `node tests/coastal/run-all-tests.mjs`)
-- **Invocation**: `node scripts/run-coastal-tests.mjs`
-- **Output Format**: Structured TAP/JSON and console output with zero failure tolerance.
-- **Pass/Fail Semantics**: Process exits with code 0 on all tests passing, non-zero on any failure.
+- **Automated Runner**: `scripts/run-intake-tests.mjs`
+- **Integration**: Included in `npm test` and `scripts/run-prr-audit-suite.mjs`
+- **Pass/Fail Semantics**: Exit code 0 if all tests pass with 100% assertion score; non-zero on any failure.
 
-## 4 Tiers Description
-- **Tier 1: Feature Coverage (>=5 test cases per feature)**: Validate isolated behaviors (e.g. step logging, mileage calculation, devotional rotation, join group).
-- **Tier 2: Boundary & Corner Cases (>=5 test cases per feature)**: Validate boundaries (e.g. 0 steps, 1 step, 100k steps, leap days, timezone changes, max message length, empty strings, anonymous toggle).
-- **Tier 3: Cross-Feature Combinations (Pairwise)**: Step log triggers communal milestone unlock; reflection save with devotional day shift; auth modal switch during logging.
-- **Tier 4: Real-World Workload Scenarios**: Sunday church group walking surge (50 concurrent walkers logging), full 14-day continuous walking streak journey, anonymous vs public leaderboards.
+## Real-World Application Scenarios (Tier 4)
+| # | Scenario | Features Exercised | Complexity |
+|---|----------|--------------------|------------|
+| 1 | On-Site Athlete Complete Journey | Coach copies Track A link -> Client opens form -> Drafts answers -> Signs turf/weather waiver -> Submits -> DB persists -> GHL contact created -> Coach receives SMS & email | High |
+| 2 | Executive Remote Biometrics Journey | Client opens Track B -> Enters Oura/Whoop stats & desk ergonomics -> Restores from interrupted session -> Signs dynamic recovery waiver -> Submits -> Receives confirmation email | High |
+| 3 | Nutrition & Metabolic Recomp Journey | Client fills anthropometrics -> Dynamic MSJ BMR calculation -> Protein target set -> Food trigger log -> AI scanner consent -> Submits | High |
+| 4 | Coach Esh Administrative Review Journey | Coach logs in -> Sidebar links to `/admin/intakes` -> Filters new intakes -> Opens clinical detail drawer -> Reviews PAR-Q+ & signature -> Updates status to 'enrolled' | High |
+| 5 | Network Failure & Mobile Interrupt Recovery | User fills 80% of form -> Closes browser tab -> Reopens URL -> Restores draft seamlessly -> Submits -> Draft purged from LocalStorage | Medium |
+| 6 | DDoS / Ingress Fuzzing Defense | Burst of 20 rapid submissions from single IP -> First 5 processed -> 6-20 return RFC 429 Too Many Requests with Retry-After header | Medium |
+
+## Coverage Thresholds
+- **Tier 1**: ≥50 discrete feature assertions across 10 areas
+- **Tier 2**: ≥50 boundary and corner-case fuzz assertions
+- **Tier 3**: ≥15 cross-feature combinatorial integration assertions
+- **Tier 4**: 6 comprehensive real-world multi-actor end-to-end scenarios
+- **Static Zero-Emoji Check**: 100% of `.tsx`, `.ts`, and `.css` files verified with zero emojis
+- **Total Minimum**: ≥120 discrete verification checks

@@ -1,8 +1,9 @@
 import { NextRequest } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { ghl } from "@/lib/ghl";
-import { sendEmail } from "@/lib/mail";
-import { sendSMS } from "@/lib/sms";
+import { logger, maskEmail, maskName } from "@/lib/logger";
+import { StripeWebhookHeaderSchema } from "@/lib/validation/schemas";
+import { container } from "@/lib/container";
 
 /**
  * POST /api/webhook/stripe
@@ -25,27 +26,32 @@ export async function POST(request: NextRequest) {
 
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!webhookSecret) {
-    console.error("[stripe-webhook] STRIPE_WEBHOOK_SECRET not set");
+    logger.error("[stripe-webhook] STRIPE_WEBHOOK_SECRET not set");
     return Response.json(
       { error: "Webhook secret not configured" },
       { status: 500 }
     );
   }
 
-  // ── Verify signature ──────────────────────────────────────────────────
-  const rawBody = await request.text();
-  const sig = request.headers.get("stripe-signature");
+  // ── Verify signature header with Zod schema ────────────────────────────
+  const sigHeader = request.headers.get("stripe-signature");
+  const headerValidation = StripeWebhookHeaderSchema.safeParse({
+    stripeSignature: sigHeader || "",
+  });
 
-  if (!sig) {
-    return Response.json({ error: "Missing stripe-signature" }, { status: 400 });
+  if (!headerValidation.success) {
+    return Response.json({ error: "Missing stripe-signature header" }, { status: 400 });
   }
+
+  const rawBody = await request.text();
+  const sig = headerValidation.data.stripeSignature;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let event: any;
   try {
     event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
   } catch (err) {
-    console.error("[stripe-webhook] Signature verification failed:", err);
+    logger.error("[stripe-webhook] Signature verification failed:", err);
     return Response.json({ error: "Invalid signature" }, { status: 400 });
   }
 
@@ -53,8 +59,8 @@ export async function POST(request: NextRequest) {
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object;
-      console.log(
-        `[stripe-webhook] [SUCCESS] Checkout completed — session ${session.id}, email: ${session.customer_email}`
+      logger.info(
+        `[stripe-webhook] [SUCCESS] Checkout completed — session ${session.id}, email: ${maskEmail(session.customer_email)}`
       );
 
       // ── Update lead status in Supabase ────────────────────────────────────
@@ -76,16 +82,16 @@ export async function POST(request: NextRequest) {
               .eq("email", cleanedEmail);
 
             if (error) {
-              console.error("[stripe-webhook] Supabase lead update error:", error);
+              logger.error("[stripe-webhook] Supabase lead update error:", error);
             } else {
-              console.log(`[stripe-webhook] Updated lead status in Supabase to active for ${cleanedEmail}`);
+              logger.info(`[stripe-webhook] Updated lead status in Supabase to active for ${maskEmail(cleanedEmail)}`);
             }
           }
         } catch (dbErr) {
-          console.error("[stripe-webhook] Supabase update exception:", dbErr);
+          logger.error("[stripe-webhook] Supabase update exception:", dbErr);
         }
 
-        // Send payment confirmation email to client
+        // Send payment confirmation email to client via container
         try {
           const customerName = session.metadata?.customerName || "Athlete";
           const programChoice = session.metadata?.programChoice || "coaching program";
@@ -115,7 +121,7 @@ export async function POST(request: NextRequest) {
             </div>
           `;
 
-          await sendEmail({
+          await container.communicationService.sendEmail({
             to: cleanedEmail,
             subject: clientSubject,
             html: clientHtml,
@@ -125,9 +131,9 @@ export async function POST(request: NextRequest) {
           const adminEmail = process.env.COACH_NOTIFICATION_EMAIL || "BodiedByEsh@gmail.com";
           const adminPhone = process.env.COACH_NOTIFICATION_PHONE || "+17728774231";
           
-          await sendEmail({
+          await container.communicationService.sendEmail({
             to: adminEmail,
-            subject: `Payment Received: ${customerName}`,
+            subject: `Payment Received: ${maskName(customerName)}`,
             html: `
               <div style="font-family: sans-serif; background-color: #080A0E; color: #f8fafc; padding: 40px; border-radius: 16px; border: 1px solid #1e293b; max-width: 600px; margin: auto;">
                 <h2 style="color: #c5f82a; font-size: 20px; font-weight: bold; margin-bottom: 16px;">Coaching Payment Completed</h2>
@@ -151,13 +157,13 @@ export async function POST(request: NextRequest) {
               ? "Executive Concierge"
               : programChoice || "Coaching Program";
 
-          await sendSMS({
+          await container.communicationService.sendSMS({
             to: adminPhone,
             body: `Bodied by Esh Lead: ${customerName} is inquiring about ${programName}.`,
           });
 
         } catch (mailErr) {
-          console.error("[stripe-webhook] Notification execution failed:", mailErr);
+          logger.error("[stripe-webhook] Notification execution failed:", mailErr);
         }
       }
 
@@ -171,14 +177,14 @@ export async function POST(request: NextRequest) {
             opportunityId,
             stageId: stageActive,
           });
-          console.log(
+          logger.info(
             `[stripe-webhook] GHL opportunity ${opportunityId} moved to Active`
           );
         } catch (ghlErr) {
-          console.error("[stripe-webhook] Failed to update GHL:", ghlErr);
+          logger.error("[stripe-webhook] Failed to update GHL:", ghlErr);
         }
       } else {
-        console.warn(
+        logger.warn(
           "[stripe-webhook] Skipping GHL update — missing GHL_STAGE_ACTIVE or opportunityId in metadata"
         );
       }
@@ -187,15 +193,14 @@ export async function POST(request: NextRequest) {
 
     case "customer.subscription.deleted": {
       const subscription = event.data.object;
-      console.log(
+      logger.info(
         `[stripe-webhook] [CANCELLED] Subscription cancelled — sub ${subscription.id}, customer: ${subscription.customer}`
       );
-      // Future: move to Alumni stage, send cancellation email, etc.
       break;
     }
 
     default:
-      console.log(`[stripe-webhook] Unhandled event type: ${event.type}`);
+      logger.info(`[stripe-webhook] Unhandled event type: ${event.type}`);
   }
 
   return Response.json({ received: true });

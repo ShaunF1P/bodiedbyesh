@@ -1,6 +1,5 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
-import { useAdminPin } from "../layout";
 import {
   Save,
   MapPin,
@@ -45,7 +44,6 @@ interface ParkConfig {
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 export default function AdminParkPage() {
-  const { pin } = useAdminPin();
   // Auth state — handled by admin layout, always authenticated here
   const [authenticated] = useState(true);
 
@@ -88,7 +86,7 @@ export default function AdminParkPage() {
       const res = await fetch("/api/park-config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...config, pin }),
+        body: JSON.stringify(config),
       });
 
       if (!res.ok) {

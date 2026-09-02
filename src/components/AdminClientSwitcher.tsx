@@ -57,7 +57,6 @@ export default function AdminClientSwitcher({
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [pin, setPin] = useState<string>("");
 
   // Edit targets modal
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -71,9 +70,7 @@ export default function AdminClientSwitcher({
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   useEffect(() => {
-    const savedPin = sessionStorage.getItem("admin_pin") || "0408";
-    setPin(savedPin);
-    fetchRoster(savedPin);
+    fetchRoster();
   }, []);
 
   useEffect(() => {
@@ -87,11 +84,10 @@ export default function AdminClientSwitcher({
     }
   }, [activeClient]);
 
-  const fetchRoster = async (adminPin: string) => {
+  const fetchRoster = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/client-profile?roster=true&pin=${adminPin}`, {
-        headers: { "x-admin-pin": adminPin },
+      const res = await fetch(`/api/admin/client-profile?roster=true`, {
         cache: "no-store",
       });
       const data = await res.json();
@@ -124,7 +120,6 @@ export default function AdminClientSwitcher({
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-pin": pin || "0408",
         },
         body: JSON.stringify({
           clientId: activeClient.profileId || activeClient.id,

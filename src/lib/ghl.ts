@@ -5,6 +5,8 @@
  * Singleton exported at bottom — import `ghl` from "@/lib/ghl".
  */
 
+import { fetchWithTimeout } from "@/lib/http/safe-fetch";
+
 const GHL_BASE = "https://services.leadconnectorhq.com";
 const GHL_API_VERSION = "2021-07-28";
 const MAX_RETRIES = 3;
@@ -86,7 +88,7 @@ class GHLClient {
     };
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      const res = await fetch(url, { ...options, headers });
+      const res = await fetchWithTimeout(url, { ...options, headers }, 8000);
 
       // Rate-limited → back off and retry
       if (res.status === 429 && attempt < MAX_RETRIES) {

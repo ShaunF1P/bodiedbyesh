@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { validateRequestBody } from "@/lib/validation/api-validator";
+import { ClientLoggedSetSchema } from "@/lib/validation/schemas";
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,7 +18,7 @@ export async function POST(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(_cookiesToSet) {
           // No-op for API route
         },
       },
@@ -27,12 +29,12 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "Unauthorized access" }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { exerciseId, setIndex, repsCompleted, weightLiftedLbs, isCompleted } = body;
-
-    if (!exerciseId || setIndex === undefined) {
-      return Response.json({ error: "exerciseId and setIndex are required" }, { status: 400 });
+    const validation = await validateRequestBody(request, ClientLoggedSetSchema);
+    if (!validation.success) {
+      return validation.response;
     }
+
+    const { exerciseId, setIndex, repsCompleted, weightLiftedLbs, isCompleted } = validation.data;
 
     // Double check that the exercise belongs to a workout assigned to this user
     // (Enforces the RLS policy constraint at the API layer as well)
@@ -49,9 +51,6 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "Exercise not found" }, { status: 404 });
     }
 
-    // The workouts table client_id is linked to client_profiles table id.
-    // In our sql migration, client_profiles id is identical to auth.users id (since user_id is PK).
-    // Let's verify ownership:
     const profileId = (exercise.workout as any)?.client_id;
     
     // Fetch user's profile to compare
@@ -78,9 +77,9 @@ export async function POST(request: NextRequest) {
       result = await supabase
         .from("logged_sets")
         .update({
-          reps_completed: repsCompleted !== null ? parseInt(repsCompleted.toString()) : null,
-          weight_lifted_lbs: weightLiftedLbs !== null ? parseInt(weightLiftedLbs.toString()) : null,
-          is_completed: !!isCompleted,
+          reps_completed: repsCompleted !== null && repsCompleted !== undefined ? parseInt(repsCompleted.toString()) : null,
+          weight_lifted_lbs: weightLiftedLbs !== null && weightLiftedLbs !== undefined ? parseInt(weightLiftedLbs.toString()) : null,
+          is_completed: Boolean(isCompleted),
           logged_at: new Date().toISOString()
         })
         .eq("id", existingSet.id)
@@ -92,9 +91,9 @@ export async function POST(request: NextRequest) {
         .insert({
           workout_exercise_id: exerciseId,
           set_index: setIndex,
-          reps_completed: repsCompleted !== null ? parseInt(repsCompleted.toString()) : null,
-          weight_lifted_lbs: weightLiftedLbs !== null ? parseInt(weightLiftedLbs.toString()) : null,
-          is_completed: !!isCompleted
+          reps_completed: repsCompleted !== null && repsCompleted !== undefined ? parseInt(repsCompleted.toString()) : null,
+          weight_lifted_lbs: weightLiftedLbs !== null && weightLiftedLbs !== undefined ? parseInt(weightLiftedLbs.toString()) : null,
+          is_completed: Boolean(isCompleted)
         })
         .select()
         .single();

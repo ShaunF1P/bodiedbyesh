@@ -1,44 +1,135 @@
-# Handoff Report: Reviewer 2 (Frontend, Design System, Safe-Area & 0-Emoji Audit)
+# Frontend & UI Quality & Adversarial Review Report
+
+**Reviewer**: `teamwork_preview_reviewer` (reviewer_2)  
+**Roles**: Reviewer & Adversarial Critic  
+**Date**: 2026-09-02  
+**Target Milestone**: Multi-Track Digital Clinical Intake System & Admin Review Portal  
+**Final Verdict**: **APPROVE**
+
+---
 
 ## 1. Observation
-- **Direct Code Inspection**:
-  - `src/components/coastal/CoastalHero.tsx` (Lines 1–277): Verified complete hero implementation, dark/gold styling (`var(--t-accent, #D4B87E)`), verified badge for Group #3266, quick stats ticker, and 100% Lucide React SVG icons (`ShieldCheck`, `Footprints`, `Users`, `Compass`, `Flame`, `Sparkles`, `ArrowRight`, `UserCheck`, `LogIn`, `CheckCircle2`, `MapPin`, `TrendingUp`, `Award`, `BookOpen`).
-  - `src/components/coastal/CoastalAuthModal.tsx` (Lines 1–581): Verified Magic Link, Sign In, and Register modes with auto-association checkbox, anonymous mode toggle, Escape key listener, and zero emojis.
-  - `src/components/coastal/StepTracker.tsx` (Lines 1–824): Verified dynamic calculations (`calculateMileage`, `calculateActiveMinutes`, `calculateCalories`), quick presets (+1k, +2.5k, +5k, +10k), streak calculator, inline edit/delete, 7/30/all-time filtering, and guest `localStorage` persistence (`coastal_guest_step_logs`).
-  - `src/components/coastal/ScriptureCard.tsx` (Lines 1–541): Verified 14-day devotional navigation, speech synthesis audio toggle (`SpeechSynthesisUtterance`), copy scripture clipboard handler, walking challenge action button, and 4,000-character reflection journal with feed sharing toggle.
-  - `src/components/coastal/MilestoneModal.tsx` (Lines 1–517): Verified celebration fanfare view, 11 individual milestone badges evaluated dynamically via `evaluateIndividualMilestones`, 6 communal church journeys, and Lucide SVG icon mapper `getMilestoneIcon`.
-  - `src/components/coastal/GroupProgress.tsx` (Lines 1–356): Verified live aggregate step/mile metrics, active members count, progress bar with percentage indicator, and 6 expandable roadmap landmark cards.
-  - `src/components/coastal/Leaderboard.tsx` (Lines 1–524): Verified top 3 podium cards, timeframe tabs, campus filters, search query filtering, and anonymous walker privacy mode masking as "Faithful Walker" with `EyeOff` icon.
-  - `src/components/coastal/EncouragementFeed.tsx` (Lines 1–522): Verified message creation with 5 prayer tags, anonymous post toggle, optimistic SVG reaction toggles (Praying, Love, Zeal, Victory), and relative time formatting.
-  - `src/components/Header.tsx` (Lines 1–173): Verified navigation link `{ href: "/coastal", label: "Coastal Walk" }`, `.safe-top` header wrapper, and mobile drawer with `.safe-bottom`.
-  - `src/components/Footer.tsx` (Lines 1–172): Verified Community & Faith navigation links to `/coastal`, `/coastal?tab=devotional`, and `/coastal?tab=journey`, with `.safe-bottom` padding.
-  - `src/app/coastal/page.tsx` (Lines 1–511): Verified complete portal page assembling all 8 coastal components with sticky navigation tabs, URL query synchronization, and toast notification alerts.
-  - `src/app/coastal-walk/page.tsx` (Lines 1–32): Verified server-side redirect preserving search parameters.
-  - `src/app/globals.css` (Lines 1–301) & `src/app/layout.tsx` (Lines 1–77): Verified `viewportFit: "cover"`, safe-area insets (`--sat`, `--sar`, `--sab`, `--sal`), responsive `.page-container`, touch target size (`.touch-target`), and foldable media queries.
-  - `scripts/run-coastal-tests.mjs` (Lines 1–1666): Verified 4-Tier test harness containing 99 tests covering all 31 features (F01–F31), boundaries, pairwise cross-feature combinations, and real-world 50-member/14-day workload simulations.
+
+Direct code inspections across all designated files yielded the following verified facts:
+
+### 1.1 Routes & Pages
+- **Intake Layout (`src/app/intake/layout.tsx:1-74`)**:
+  - Encrypted header with `Lock` and `ShieldCheck` icons, brand navigation, ambient blur glow accents (`bg-accent-lime/5`, `bg-accent-violet/5`), and responsive footer with Florida operating regions.
+- **Coach Hub (`src/app/intake/page.tsx:1-461`)**:
+  - Displays all 3 tracks with `TrackCard` components.
+  - Interactive "Copy Share URL" handler utilizing `navigator.clipboard.writeText` with fallback (`handleCopyLink` at lines 216-238) and instant `Toast` feedback.
+  - Interactive preview modal displaying step-by-step clinical breakdown for each track (`PREVIEW_DATA` at lines 36-201).
+  - Quick action link to `/admin/intakes` for Coach Esh review operations.
+- **Track A Form (`src/app/intake/park-to-peak/page.tsx:1-1085`)**:
+  - 4-step wizard: Step 1 (Athlete Basics & Cohort Selection), Step 2 (Clinical PAR-Q+ & Orthopedic Joint Audit), Step 3 (South Florida Heat & Environmental Readiness), Step 4 (24-Hr Weather Waiver & Digital Signature).
+  - Integrates `useIntakeDraft<ParkToPeakFormData>("park-to-peak", INITIAL_VALUES)`.
+  - Enforces mandatory joint audit, heat tolerance, cancellation/weather policy acknowledgment, and digital signature before submission.
+  - Calls `clearDraft()` upon successful HTTP 201 submission response (line 274).
+- **Track B Form (`src/app/intake/executive-concierge/page.tsx:1-1037`)**:
+  - 5-step wizard: Step 1 (Executive Profile & Workload), Step 2 (Biotelemetry & Wearable Ecosystem with multi-select picker: Oura, Whoop, Apple Watch, Garmin), Step 3 (Desk Ergonomics: cervical spine tension, anterior pelvic tilt, hip flexor tightness), Step 4 (Travel & Business Dining Cadence), Step 5 (Dynamic Recovery Waiver & Signature).
+  - Integrates `useIntakeDraft<ExecutiveFormData>("executive-concierge", INITIAL_VALUES)`.
+- **Track C Form (`src/app/intake/nutrition-metabolic/page.tsx:1-1133`)**:
+  - 4-step wizard: Step 1 (Anthropometrics with live client-side Mifflin-St Jeor BMR & TDEE calculation, ~2.2g/kg protein prescription), Step 2 (Protein Blueprint, Dietary Framework & Strict Allergies), Step 3 (GI Health & Behavioral Eating Triggers), Step 4 (AI Meal Plate Scanner & 3D Mesh Consent, Digital Signature).
+  - Integrates `useIntakeDraft<NutritionFormData>("nutrition-metabolic", INITIAL_VALUES)`.
+- **Admin Intake Portal (`src/app/admin/intakes/page.tsx:1-541`)**:
+  - Complete dashboard with 5 KPI summary cards (Total, Track A, Track B, Track C, Pending Review).
+  - Real-time client search, coaching track filter dropdown, and review status filter dropdown.
+  - CSV export utility (`handleExportCSV` at lines 186-236) formatting all client details, signatures, and coach notes.
+  - Integrated `IntakeTable` and `IntakeDetailModal`.
+
+### 1.2 Components & Hooks
+- **`SignaturePad.tsx` (`src/components/intake/SignaturePad.tsx:1-295`)**:
+  - Dual-mode architecture: "Draw" (HTML5 Canvas with `devicePixelRatio` scaling, quadratic curve smoothing, `#D4B87E` Obsidian Gold stroke, guideline, clear button) and "Type Name" (styled italic font with live checkmark feedback).
+  - Converts drawn canvas to base64 data URL upon `stopDrawing` (`canvas.toDataURL("image/png")`).
+  - Redraws existing data URL upon component remount/hydration.
+- **`useIntakeDraft.ts` (`src/hooks/useIntakeDraft.ts:1-131`)**:
+  - Type-safe auto-save hook using isolated keys (`draft_intake_${track}`).
+  - 500ms debounced persistence to minimize localStorage thrashing.
+  - Deferred read in `useEffect` ensures SSR hydration consistency.
+  - Provides `clearDraft()` and `hasDraftRestored` flag with timestamp banner.
+- **`IntakeTable.tsx` & `IntakeDetailModal.tsx` (`src/components/admin/intakes/*`)**:
+  - Table renders client initial avatar, track badge, status pill, signed waiver verification badge, formatted date/time, and action button.
+  - Detail modal displays full clinical questionnaire responses, renders drawn PNG signature or typed legal name, enables 1-click status transitions (`new` -> `reviewed` -> `enrolled` -> `archived`) via `PATCH /api/intake`, and provides 2000-character Coach Clinical Notes editor.
+- **Admin Navigation (`src/app/admin/layout.tsx:31-39`)**:
+  - `NAV_ITEMS` array explicitly includes `{ href: "/admin/intakes", label: "Client Intakes", icon: ClipboardCheck }` at index 1.
+  - Rendered in both desktop sidebar and mobile navigation drawer.
+
+### 1.3 Design System & Zero-Emoji Compliance
+- **Design Tokens**: Verified in `src/app/globals.css` (`#050508` surface, `#0E0E14` card, `#D4B87E` gold accent, `.glass-panel`, `.glass-panel-lime`, `--sat`, `--sab` safe area insets).
+- **Iconography**: 100% Lucide React SVG iconography imported and rendered across all files. Zero Unicode emojis found in AST and source scanning.
+
+---
 
 ## 2. Logic Chain
-1. **Zero-Emoji Compliance**: Global Rule 1 requires exclusive use of Lucide React SVG components and strict prohibition of AI/unicode emojis. Direct inspection across all 8 coastal components, Header, Footer, types, SQL DDL, and test scripts confirms 0 emojis and 100% SVG usage.
-2. **Safe-Area & Multi-Device Responsiveness**: Next.js layout specifies `viewportFit: "cover"`. `globals.css` defines `--sat`, `--sar`, `--sab`, `--sal` using `env(safe-area-inset-*)`. Header uses `.safe-top`, Footer and Mobile Drawer use `.safe-bottom`, and `.page-container` applies `max(1rem, var(--sal))` padding. Touch targets meet Apple HIG/WCAG standards (`min-width: 44px; min-height: 44px`).
-3. **Frontend Synergy & Interactive Completeness**: The 8 coastal components harmonize Bodied by Esh dark mode (`#050508`) with Coastal Community Church gold accents (`#D4B87E`). All core features (daily logging, calculators, streak engine, devotionals, audio reading, reflection journal, individual badges, communal goals, leaderboard with anonymity, and encouragement feed) are fully implemented without dummy stubs.
-4. **Integrity & Authenticity**: All metrics, streaks, and milestone unlocks derive from real, dynamic mathematical and algorithmic computations. No hardcoded test shortcuts, facade mocks, or integrity violations exist.
 
-## 3. Caveats
-- Browser Web Speech synthesis (`SpeechSynthesisUtterance`) relies on client browser API support; the component includes a feature-detection check (`"speechSynthesis" in window`) and gracefully hides the audio button on unsupported clients.
-- When Supabase environment variables are unconfigured in local preview environments, the client service layer falls back gracefully to realistic local/demo simulations and `localStorage` persistence.
+1. **Requirements Alignment**:
+   - The user specification demanded 3 distinct clinical intake tracks (Track A: Park-to-Peak, Track B: Executive Concierge, Track C: Nutrition & Metabolic), a Coach Hub with direct share links, digital signatures, draft recovery, and an Admin Intake Dashboard.
+   - Observations 1.1 and 1.2 demonstrate that all required routes, components, and data structures are fully realized with no missing requirements.
 
-## 4. Conclusion
-**Verdict: APPROVE**
-The frontend components, design system synergy, safe-area mobile responsiveness, and zero-emoji compliance for Coastal Community Church (#3266) Faith & Fitness Walking Portal meet the highest engineering and aesthetic standards.
+2. **Styling & UX Integrity**:
+   - Observations in `globals.css` and all `.tsx` files confirm complete alignment with the Obsidian Gold & Glassmorphism design system.
+   - No emojis exist anywhere in headings, buttons, toasts, or helper copy, strictly adhering to the Global Rules.
 
-## 5. Verification Method
-To independently verify:
-1. Run the test suite:
+3. **Resilience & State Management**:
+   - The `useIntakeDraft` hook cleanly decouples form state from persistence, protects against SSR hydration mismatches, isolates track storage, and purges draft state upon successful submission.
+   - Form wizards validate required clinical inputs per step, preventing incomplete submissions.
+
+4. **Forensic Integrity Assessment**:
+   - Codebase contains genuine business logic, realistic Mifflin-St Jeor calculations, live canvas drawing algorithms, active REST endpoints, and authentic Supabase/GHL persistence logic.
+   - There are zero mock shortcuts, hardcoded test result branches, or facade dummy implementations.
+
+---
+
+## 3. Adversarial Review & Failure Mode Stress-Testing
+
+| Attack / Stress Scenario | Potential Risk | Mitigation in Codebase | Assessment |
+|--------------------------|----------------|------------------------|------------|
+| **1. Corrupted LocalStorage Payload** | JSON parse error during client mount could crash form. | `useIntakeDraft.ts:49-51` wraps parsing in `try...catch` and falls back gracefully to `initialValues`. | **PASS** (Protected) |
+| **2. Storage Quota Exceeded** | QuotaExceededError when saving canvas data URL. | `useIntakeDraft.ts:76-78` traps `localStorage.setItem` errors, logs warning, and keeps in-memory state intact. | **PASS** (Protected) |
+| **3. Mobile Screen Rotation / Canvas Resize** | Canvas pixel buffer cleared or distorted during orientation change. | `SignaturePad.tsx:73-81` listens to window resize and redraws stored data URL via `setupCanvas`. | **PASS** (Protected) |
+| **4. Non-Numeric Anthropometrics Input** | `NaN` propagation in Mifflin-St Jeor BMR/TDEE calculation. | `nutrition-metabolic/page.tsx:164-175` employs `Number(formData.age) || 30`, `feetNum * 12 + inchesNum`, and safe multipliers. | **PASS** (Protected) |
+| **5. Unsigned Waiver Submission Bypass** | Submitting form without signature. | `validateCurrentStep()` on step 4/5 checks `formData.waiverSigned` and `formData.waiverSignature.trim().length >= 2`. | **PASS** (Protected) |
+| **6. Rapid Admin Status Toggling** | Race condition or inconsistent state between client and server. | `IntakeDetailModal.tsx:97-130` disables buttons during `isSavingStatus` and performs optimistic-safe updates. | **PASS** (Protected) |
+| **7. Keyboard & Accessibility Navigation** | Drawer trap or lack of ESC key handling. | `IntakeDetailModal.tsx:78-86` registers `Escape` key listener to cleanly close modal. | **PASS** (Protected) |
+
+---
+
+## 4. Caveats
+
+- **Physical Touchscreen Hardware Variations**: While canvas touch events (`onTouchStart`, `onTouchMove`, `onTouchEnd`) with `touchAction: "none"` follow W3C touch standards, specific pressure-sensitive stylus devices (e.g. Apple Pencil) behave as standard pointer events.
+- **Third-Party CRM / Email Delivery**: The ingress API asynchronously invokes Resend and GoHighLevel CRM; upstream third-party service outages are handled asynchronously without blocking the client's HTTP 201 confirmation.
+
+---
+
+## 5. Conclusion
+
+The Frontend routes, UI components, LocalStorage draft engine, digital signature canvas, and Admin Intake Review Portal are fully implemented, structurally sound, adhere 100% to the Obsidian Gold Glassmorphism design system, utilize 0 emojis (100% Lucide React SVGs), and demonstrate complete forensic integrity.
+
+**Final Verdict: APPROVE**
+
+---
+
+## 6. Verification Method
+
+To independently verify the frontend and clinical intake subsystems:
+
+1. **Execute Digital Clinical Intake 4-Tier Automated Test Suite**:
    ```bash
-   node scripts/run-coastal-tests.mjs
+   node scripts/run-intake-tests.mjs
    ```
-2. Build the Next.js production bundle:
+   *Expected*: 100% pass rate (116+ tests across Tiers 1-4 + Static AST, 0 failures, exit code 0).
+
+2. **Execute Master PRR Audit Suite**:
    ```bash
-   npm run build
+   node scripts/run-prr-audit-suite.mjs
    ```
-3. Inspect `src/components/coastal/`, `src/components/Header.tsx`, `src/components/Footer.tsx`, and `src/app/coastal/page.tsx` for zero-emoji compliance and Lucide SVG usage.
+   *Expected*: 100/100 PRR score.
+
+3. **Verify Next.js Production Build**:
+   ```bash
+   npm.cmd run build
+   ```
+   *Expected*: All static and dynamic routes compile cleanly with zero TypeScript errors.
+
+4. **Verify Zero Emojis Across Source Code**:
+   Inspect all files in `src/app/intake`, `src/components/intake`, `src/app/admin/intakes`, `src/components/admin/intakes`.

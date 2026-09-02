@@ -7,9 +7,6 @@ import { Lock, Eye, EyeOff, CheckCircle, ChevronLeft, ChevronRight, MessageSquar
 import { LOGO_OPTIONS, type LogoOption } from "@/lib/logos";
 
 export default function LogoReview() {
-  const [isUnlocked, setIsUnlocked] = useState(false);
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState(false);
   const [selectedId, setSelectedId] = useState(36);
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [previewTheme, setPreviewTheme] = useState<"dark" | "light">("dark");
@@ -34,9 +31,6 @@ export default function LogoReview() {
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
 
   useEffect(() => {
-    if (sessionStorage.getItem("logo_review_unlocked") === "true") {
-      setIsUnlocked(true);
-    }
     const savedName = localStorage.getItem("logo_client_name");
     if (savedName) {
       setClientName(savedName);
@@ -104,17 +98,6 @@ export default function LogoReview() {
   useEffect(() => {
     localStorage.setItem("logo_pref_hidden", JSON.stringify(hiddenIds));
   }, [hiddenIds]);
-
-  const handleUnlock = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password.toLowerCase() === "bodiedbyesh") {
-      setIsUnlocked(true);
-      setError(false);
-      sessionStorage.setItem("logo_review_unlocked", "true");
-    } else {
-      setError(true);
-    }
-  };
 
   const filteredLogos = LOGO_OPTIONS.filter((logo) => {
     if (!logo.isFinalist) return false;
@@ -312,52 +295,6 @@ ${feedback || "No specific notes"}
     navigator.clipboard.writeText(getCopyText());
     alert("Selections and feedback copied to clipboard! You can now paste and send them directly to Esh.");
   };
-
-  // Password Lock Screen
-  if (!isUnlocked) {
-    return (
-      <div className="min-h-screen bg-[#030305] text-white flex items-center justify-center p-4">
-        <div className="absolute top-[-10%] left-[-10%] w-[300px] h-[300px] bg-[#B84D72] filter blur-[120px] rounded-full opacity-20 pointer-events-none" />
-        <div className="absolute bottom-[10%] right-[-10%] w-[300px] h-[300px] bg-[#E0659A] filter blur-[120px] rounded-full opacity-15 pointer-events-none" />
-
-        <div className="w-full max-w-md glass-panel rounded-3xl p-8 border border-white/5 relative overflow-hidden">
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 rounded-2xl bg-accent-lime/10 flex items-center justify-center text-accent-lime mx-auto mb-6 border border-accent-lime/20 animate-pulse">
-              <Lock className="w-8 h-8" />
-            </div>
-            <h1 className="font-display font-bold text-2xl tracking-tight mb-2">Client Brand Review</h1>
-            <p className="text-silver-slate text-sm font-light">
-              Enter the passcode provided by Esh to review the custom logo concepts.
-            </p>
-          </div>
-
-          <form onSubmit={handleUnlock} className="space-y-4">
-            <div>
-              <input
-                type="password"
-                required
-                placeholder="Enter passcode"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-[#0A0A10] border border-white/10 focus:border-accent-lime rounded-xl px-4 py-3 text-sm focus:outline-none transition-all text-center"
-              />
-              {error && (
-                <p className="text-red-400 text-xs text-center mt-2 font-medium">
-                  Invalid passcode. Hint: bodiedbyesh
-                </p>
-              )}
-            </div>
-            <button
-              type="submit"
-              className="w-full inline-flex items-center justify-center bg-accent-lime text-cyber-slate font-bold uppercase tracking-wider text-xs py-3 rounded-xl hover:bg-accent-lime/90 transition-all cursor-pointer shadow-lg shadow-accent-lime/10"
-            >
-              Access Portal
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-[#030305] text-white flex flex-col pb-28 relative">

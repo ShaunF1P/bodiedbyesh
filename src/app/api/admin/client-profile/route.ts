@@ -1,5 +1,12 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireAdminSession } from "@/lib/auth/admin";
+import { validateRequestBody, validateQueryParams } from "@/lib/validation/api-validator";
+import {
+  AdminClientProfileQuerySchema,
+  AdminClientProfileCreateSchema,
+  AdminClientProfileUpdateSchema,
+} from "@/lib/validation/schemas";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -13,30 +20,32 @@ function getSupabase() {
 // GET: Fetch client roster or individual client profile data for admin view & assist
 export async function GET(request: NextRequest) {
   try {
-    const adminPin = request.headers.get("x-admin-pin") || request.nextUrl.searchParams.get("pin");
-    const configuredPin = process.env.ADMIN_PIN || "0408";
-    if (adminPin !== configuredPin && adminPin !== "0408" && adminPin !== "bodiedbyesh") {
-      return Response.json({ error: "Unauthorized access" }, { status: 401 });
+    const { error: authError } = await requireAdminSession(request);
+    if (authError) {
+      return authError;
     }
 
+    const queryValidation = validateQueryParams(
+      request.nextUrl.searchParams,
+      AdminClientProfileQuerySchema
+    );
+    if (!queryValidation.success) {
+      return queryValidation.response;
+    }
+
+    const { clientId, userId, email, roster, all } = queryValidation.data;
+    const isRoster = roster === "true" || all === "true";
     const supabase = getSupabase();
-    const searchParams = request.nextUrl.searchParams;
-    const clientId = searchParams.get("clientId");
-    const userId = searchParams.get("userId");
-    const email = searchParams.get("email");
-    const isRoster = searchParams.get("roster") === "true" || searchParams.get("all") === "true";
 
     // ── 1. Fetch Consolidated Client Roster ──
     if (isRoster || (!clientId && !userId && !email)) {
-      const [leadsRes, profilesRes, membersRes] = await Promise.all([
+      const [leadsRes, profilesRes] = await Promise.all([
         supabase.from("coaching_leads").select("*").order("created_at", { ascending: false }),
         supabase.from("client_profiles").select("*").order("created_at", { ascending: false }),
-        supabase.from("group_members").select("*"),
       ]);
 
       const leads = leadsRes.data || [];
       const profiles = profilesRes.data || [];
-      const members = membersRes.data || [];
 
       // Map combined roster with deduplication by email
       const emailMap = new Map<string, any>();
@@ -98,8 +107,8 @@ export async function GET(request: NextRequest) {
         }
       });
 
-      const roster = Array.from(emailMap.values());
-      return Response.json({ success: true, roster, total: roster.length });
+      const fullRoster = Array.from(emailMap.values());
+      return Response.json({ success: true, roster: fullRoster, total: fullRoster.length });
     }
 
     // ── 2. Fetch Single Client Details for Admin Impersonation ──
@@ -135,19 +144,31 @@ export async function GET(request: NextRequest) {
     if (effectiveUserId || effectiveClientId) {
       const idToUse = effectiveUserId || effectiveClientId;
 
-      const [mealsRes, scansRes, workoutsRes, setsRes, stepsRes] = await Promise.all([
+      const [mealsRes, scansRes, workoutsRes, stepsRes] = await Promise.all([
         supabase.from("logged_meals").select("*").eq("user_id", idToUse).order("logged_at", { ascending: false }).limit(30),
         supabase.from("body_scans").select("*").eq("user_id", idToUse).order("created_at", { ascending: false }).limit(20),
-        supabase.from("workouts").select("*, workout_exercises(*)").eq("client_id", effectiveClientId || idToUse).order("date", { ascending: false }),
-        supabase.from("logged_sets").select("*").eq("user_id", idToUse).order("logged_at", { ascending: false }).limit(50),
+        supabase.from("workouts").select("*, workout_exercises(*, logged_sets(*))").eq("client_id", effectiveClientId || idToUse).order("date", { ascending: false }),
         supabase.from("step_logs").select("*").eq("user_id", idToUse).order("log_date", { ascending: false }).limit(30),
       ]);
 
       foodLogs = mealsRes.data || [];
       bodyScans = scansRes.data || [];
       assignedWorkouts = workoutsRes.data || [];
-      loggedSets = setsRes.data || [];
       stepLogs = stepsRes.data || [];
+
+      // Safely aggregate logged sets from relational workout exercises
+      loggedSets = assignedWorkouts.flatMap((w: any) =>
+        (w.workout_exercises || []).flatMap((ex: any) =>
+          (ex.logged_sets || []).map((s: any) => ({
+            ...s,
+            exercise_id: ex.id,
+            exercise_name: ex.exercise_name,
+            workout_id: w.id,
+            workout_name: w.name,
+            workout_date: w.date,
+          }))
+        )
+      ).sort((a: any, b: any) => new Date(b.logged_at).getTime() - new Date(a.logged_at).getTime()).slice(0, 50);
     }
 
     return Response.json({
@@ -171,19 +192,17 @@ export async function GET(request: NextRequest) {
 // POST: Create a profile beforehand (e.g. when Coach Esh sets up a plan for a lead)
 export async function POST(request: NextRequest) {
   try {
-    const adminPin = request.headers.get("x-admin-pin");
-    const configuredPin = process.env.ADMIN_PIN || "0408";
-    if (adminPin !== configuredPin && adminPin !== "0408" && adminPin !== "bodiedbyesh") {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    const { error: authError } = await requireAdminSession(request);
+    if (authError) {
+      return authError;
     }
 
-    const body = await request.json();
-    const { name, email, weight_lbs, target_weight_lbs, target_calories, target_protein, target_carbs, target_fat } = body;
-
-    if (!email || !name) {
-      return Response.json({ error: "Missing name or email" }, { status: 400 });
+    const validation = await validateRequestBody(request, AdminClientProfileCreateSchema);
+    if (!validation.success) {
+      return validation.response;
     }
 
+    const { name, email, weight_lbs, target_weight_lbs, target_calories, target_protein, target_carbs, target_fat } = validation.data;
     const supabase = getSupabase();
 
     // Check if exists
@@ -198,12 +217,12 @@ export async function POST(request: NextRequest) {
         .from("client_profiles")
         .update({
           name: name.trim(),
-          weight_lbs: weight_lbs ? parseFloat(weight_lbs) : existing.weight_lbs,
-          target_weight_lbs: target_weight_lbs ? parseFloat(target_weight_lbs) : existing.target_weight_lbs,
-          target_calories: target_calories ? parseInt(target_calories) : existing.target_calories,
-          target_protein: target_protein ? parseInt(target_protein) : existing.target_protein,
-          target_carbs: target_carbs ? parseInt(target_carbs) : existing.target_carbs,
-          target_fat: target_fat ? parseInt(target_fat) : existing.target_fat,
+          weight_lbs: weight_lbs !== undefined && weight_lbs !== null ? parseFloat(weight_lbs.toString()) : existing.weight_lbs,
+          target_weight_lbs: target_weight_lbs !== undefined && target_weight_lbs !== null ? parseFloat(target_weight_lbs.toString()) : existing.target_weight_lbs,
+          target_calories: target_calories !== undefined && target_calories !== null ? parseInt(target_calories.toString()) : existing.target_calories,
+          target_protein: target_protein !== undefined && target_protein !== null ? parseInt(target_protein.toString()) : existing.target_protein,
+          target_carbs: target_carbs !== undefined && target_carbs !== null ? parseInt(target_carbs.toString()) : existing.target_carbs,
+          target_fat: target_fat !== undefined && target_fat !== null ? parseInt(target_fat.toString()) : existing.target_fat,
         })
         .eq("id", existing.id)
         .select()
@@ -217,12 +236,12 @@ export async function POST(request: NextRequest) {
       .insert({
         name: name.trim(),
         email: email.trim().toLowerCase(),
-        weight_lbs: weight_lbs ? parseFloat(weight_lbs) : null,
-        target_weight_lbs: target_weight_lbs ? parseFloat(target_weight_lbs) : null,
-        target_calories: target_calories ? parseInt(target_calories) : 1850,
-        target_protein: target_protein ? parseInt(target_protein) : 160,
-        target_carbs: target_carbs ? parseInt(target_carbs) : 185,
-        target_fat: target_fat ? parseInt(target_fat) : 52,
+        weight_lbs: weight_lbs !== undefined && weight_lbs !== null ? parseFloat(weight_lbs.toString()) : null,
+        target_weight_lbs: target_weight_lbs !== undefined && target_weight_lbs !== null ? parseFloat(target_weight_lbs.toString()) : null,
+        target_calories: target_calories !== undefined && target_calories !== null ? parseInt(target_calories.toString()) : 1850,
+        target_protein: target_protein !== undefined && target_protein !== null ? parseInt(target_protein.toString()) : 160,
+        target_carbs: target_carbs !== undefined && target_carbs !== null ? parseInt(target_carbs.toString()) : 185,
+        target_fat: target_fat !== undefined && target_fat !== null ? parseInt(target_fat.toString()) : 52,
       })
       .select()
       .single();
@@ -241,13 +260,16 @@ export async function POST(request: NextRequest) {
 // PATCH: Update a profile (used by Coach Esh to edit client plans)
 export async function PATCH(request: NextRequest) {
   try {
-    const adminPin = request.headers.get("x-admin-pin");
-    const configuredPin = process.env.ADMIN_PIN || "0408";
-    if (adminPin !== configuredPin && adminPin !== "0408" && adminPin !== "bodiedbyesh") {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    const { error: authError } = await requireAdminSession(request);
+    if (authError) {
+      return authError;
     }
 
-    const body = await request.json();
+    const validation = await validateRequestBody(request, AdminClientProfileUpdateSchema);
+    if (!validation.success) {
+      return validation.response;
+    }
+
     const {
       clientId,
       email,
@@ -257,21 +279,17 @@ export async function PATCH(request: NextRequest) {
       target_protein,
       target_carbs,
       target_fat,
-    } = body;
-
-    if (!clientId && !email) {
-      return Response.json({ error: "Missing clientId or email" }, { status: 400 });
-    }
+    } = validation.data;
 
     const supabase = getSupabase();
 
     let query = supabase.from("client_profiles").update({
-      weight_lbs: weight_lbs !== undefined ? (weight_lbs ? parseFloat(weight_lbs) : null) : undefined,
-      target_weight_lbs: target_weight_lbs !== undefined ? (target_weight_lbs ? parseFloat(target_weight_lbs) : null) : undefined,
-      target_calories: target_calories !== undefined ? (target_calories ? parseInt(target_calories) : null) : undefined,
-      target_protein: target_protein !== undefined ? (target_protein ? parseInt(target_protein) : null) : undefined,
-      target_carbs: target_carbs !== undefined ? (target_carbs ? parseInt(target_carbs) : null) : undefined,
-      target_fat: target_fat !== undefined ? (target_fat ? parseInt(target_fat) : null) : undefined,
+      weight_lbs: weight_lbs !== undefined ? (weight_lbs !== null ? parseFloat(weight_lbs.toString()) : null) : undefined,
+      target_weight_lbs: target_weight_lbs !== undefined ? (target_weight_lbs !== null ? parseFloat(target_weight_lbs.toString()) : null) : undefined,
+      target_calories: target_calories !== undefined ? (target_calories !== null ? parseInt(target_calories.toString()) : null) : undefined,
+      target_protein: target_protein !== undefined ? (target_protein !== null ? parseInt(target_protein.toString()) : null) : undefined,
+      target_carbs: target_carbs !== undefined ? (target_carbs !== null ? parseInt(target_carbs.toString()) : null) : undefined,
+      target_fat: target_fat !== undefined ? (target_fat !== null ? parseInt(target_fat.toString()) : null) : undefined,
     });
 
     if (clientId) query = query.eq("id", clientId);

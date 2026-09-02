@@ -1,7 +1,8 @@
 "use client";
 import React, { useState, useEffect, createContext, useContext } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import {
   Lock,
   LayoutDashboard,
@@ -14,6 +15,11 @@ import {
   X,
   Footprints,
   Eye,
+  Loader2,
+  LogOut,
+  Shield,
+  ShieldAlert,
+  ClipboardCheck,
 } from "lucide-react";
 
 /* ─── Auth Context ─── */
@@ -24,6 +30,7 @@ export function useAdminPin() {
 
 const NAV_ITEMS = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/admin/intakes", label: "Client Intakes", icon: ClipboardCheck },
   { href: "/dashboard?admin=true", label: "Member View & Assist", icon: Eye },
   { href: "/admin/leads", label: "All Leads", icon: Users },
   { href: "/admin/park", label: "Park Settings", icon: MapPin },
@@ -33,103 +40,201 @@ const NAV_ITEMS = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [pin, setPin] = useState("");
-  const [authenticated, setAuthenticated] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [authError, setAuthError] = useState(false);
+  const router = useRouter();
+  const supabase = createClient();
+
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [authError, setAuthError] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Auto-verify saved pin on mount
   useEffect(() => {
-    const savedPin = sessionStorage.getItem("admin_pin");
-    if (savedPin) {
-      setPin(savedPin);
-      fetch("/api/admin/leads", {
-        headers: { "x-admin-pin": savedPin },
-        cache: "no-store",
-      }).then((res) => {
-        if (res.status === 200) {
-          setAuthenticated(true);
-        } else {
-          sessionStorage.removeItem("admin_pin");
+    async function checkAdmin() {
+      try {
+        const { data: { user: currentUser }, error } = await supabase.auth.getUser();
+        if (!error && currentUser) {
+          setUser(currentUser);
+          setIsAdmin(currentUser.app_metadata?.role === "admin");
         }
-      });
+      } catch (err) {
+        console.error("Admin auth check error:", err);
+      } finally {
+        setLoading(false);
+      }
     }
+    checkAdmin();
   }, []);
 
-  const handleAuth = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!pin) return;
-    setIsVerifying(true);
-    setAuthError(false);
+    if (!email || !password) return;
+
+    setIsSubmitting(true);
+    setAuthError("");
 
     try {
-      const res = await fetch("/api/admin/leads", {
-        headers: { "x-admin-pin": pin },
-        cache: "no-store",
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
       });
-      if (res.status === 200) {
-        setAuthenticated(true);
-        sessionStorage.setItem("admin_pin", pin);
-      } else {
-        setAuthError(true);
+
+      if (error || !data.user) {
+        setAuthError(error?.message || "Invalid credentials. Please verify your email and password.");
+        return;
       }
-    } catch {
-      setAuthError(true);
+
+      setUser(data.user);
+      const role = data.user.app_metadata?.role;
+      if (role === "admin") {
+        setIsAdmin(true);
+      } else {
+        setIsAdmin(false);
+        setAuthError("Access Denied: Your account does not have administrator privileges.");
+      }
+    } catch (err: any) {
+      setAuthError(err.message || "Failed to authenticate.");
     } finally {
-      setIsVerifying(false);
+      setIsSubmitting(false);
     }
   };
 
-  /* ─── PIN Gate ─── */
-  if (!authenticated) {
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setIsAdmin(false);
+    setEmail("");
+    setPassword("");
+    setAuthError("");
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-cyber-slate flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-accent-lime animate-spin" />
+      </div>
+    );
+  }
+
+  /* ─── Sign In / Access Gate ─── */
+  if (!user || !isAdmin) {
     return (
       <div className="min-h-screen bg-cyber-slate flex items-center justify-center px-6">
-        <div className="w-full max-w-sm">
-          <div className="glass-panel rounded-3xl p-8 border border-white/5">
+        <div className="w-full max-w-md">
+          <div className="glass-panel rounded-3xl p-8 border border-white/10 shadow-2xl">
             <div className="w-14 h-14 rounded-2xl bg-accent-lime/10 flex items-center justify-center text-accent-lime mx-auto mb-6">
-              <Lock className="w-7 h-7" />
-            </div>
-            <h1 className="font-display font-bold text-2xl text-center text-ice-white mb-1">
-              Admin Dashboard
-            </h1>
-            <p className="text-silver-slate text-xs text-center mb-8">
-              Enter your PIN to access the admin panel.
-            </p>
-            <form onSubmit={handleAuth} className="space-y-4">
-              <input
-                type="password"
-                inputMode="numeric"
-                maxLength={4}
-                value={pin}
-                onChange={(e) => {
-                  setPin(e.target.value);
-                  setAuthError(false);
-                }}
-                placeholder="• • • •"
-                className={`w-full text-center text-2xl tracking-[0.5em] bg-cyber-slate border rounded-xl px-4 py-4 focus:outline-none transition-all ${
-                  authError
-                    ? "border-red-500 text-red-400"
-                    : "border-white/10 focus:border-accent-lime text-ice-white"
-                }`}
-                autoFocus
-                disabled={isVerifying}
-              />
-              {authError && (
-                <p className="text-red-400 text-xs text-center flex items-center justify-center gap-1.5">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  Incorrect PIN. Try again.
-                </p>
+              {user && !isAdmin ? (
+                <ShieldAlert className="w-7 h-7 text-red-400" />
+              ) : (
+                <Shield className="w-7 h-7 text-accent-lime" />
               )}
-              <button
-                type="submit"
-                disabled={isVerifying}
-                className="w-full bg-accent-lime hover:bg-accent-lime/90 text-cyber-slate px-6 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {isVerifying ? "Verifying..." : "Unlock"}
-              </button>
-            </form>
+            </div>
+
+            <h1 className="font-display font-bold text-2xl text-center text-ice-white mb-1">
+              Admin Portal
+            </h1>
+            <p className="text-silver-slate text-xs text-center mb-6">
+              {user && !isAdmin
+                ? "Signed in as a standard member account."
+                : "Sign in with your verified administrator credentials."}
+            </p>
+
+            {user && !isAdmin ? (
+              <div className="space-y-4">
+                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold block">Access Denied</span>
+                    Your account ({user.email}) is not assigned an administrator role.
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={handleSignOut}
+                    className="flex-1 py-3 px-4 rounded-xl border border-white/10 text-xs font-semibold text-ice-white hover:bg-white/5 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Switch Account</span>
+                  </button>
+                  <Link
+                    href="/dashboard"
+                    className="flex-1 py-3 px-4 rounded-xl bg-accent-lime text-cyber-slate text-xs font-bold text-center hover:bg-accent-lime/90 transition-all flex items-center justify-center"
+                  >
+                    Go to Dashboard
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <label className="text-xs font-semibold text-silver-slate uppercase tracking-wider block mb-1.5">
+                    Admin Email
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setAuthError("");
+                    }}
+                    placeholder="coach@bodiedbyesh.com"
+                    className="w-full bg-[#0E0E14] border border-white/10 focus:border-accent-lime rounded-xl px-4 py-3 text-sm text-ice-white focus:outline-none transition-all"
+                    disabled={isSubmitting}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-silver-slate uppercase tracking-wider block mb-1.5">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setAuthError("");
+                    }}
+                    placeholder="••••••••"
+                    className="w-full bg-[#0E0E14] border border-white/10 focus:border-accent-lime rounded-xl px-4 py-3 text-sm text-ice-white focus:outline-none transition-all"
+                    disabled={isSubmitting}
+                  />
+                </div>
+
+                {authError && (
+                  <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>{authError}</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full bg-accent-lime hover:bg-accent-lime/90 text-cyber-slate px-6 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 mt-2"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Authenticating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-4 h-4" />
+                      <span>Sign In as Admin</span>
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
           </div>
+
           <div className="text-center mt-6">
             <Link href="/" className="text-silver-slate text-xs hover:text-accent-lime transition-colors">
               ← Back to site
@@ -142,7 +247,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   /* ─── Authenticated Layout ─── */
   return (
-    <AuthContext.Provider value={{ pin }}>
+    <AuthContext.Provider value={{ pin: "" }}>
       <div className="min-h-screen bg-cyber-slate text-ice-white flex">
         {/* ── Sidebar (desktop) ── */}
         <aside className="hidden md:flex md:w-64 flex-col border-r border-white/5 bg-[#080A0E] sticky top-0 h-screen">
@@ -152,7 +257,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               Back to Site
             </Link>
             <h1 className="font-display font-bold text-lg text-ice-white">Admin Panel</h1>
-            <p className="text-[10px] text-silver-slate uppercase tracking-wider mt-0.5">Bodied by Esh</p>
+            <p className="text-[10px] text-silver-slate uppercase tracking-wider mt-0.5 truncate">{user?.email}</p>
           </div>
           <nav className="flex-1 p-4 space-y-1">
             {NAV_ITEMS.map((item) => {
@@ -173,10 +278,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               );
             })}
           </nav>
-          <div className="p-4 border-t border-white/5">
-            <div className="flex items-center gap-2 px-4 py-2">
-              <div className="w-2 h-2 rounded-full bg-accent-lime animate-pulse" />
-              <span className="text-[10px] text-silver-slate uppercase tracking-wider">Authenticated</span>
+          <div className="p-4 border-t border-white/5 space-y-2">
+            <div className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-white/5">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-accent-lime animate-pulse" />
+                <span className="text-[10px] text-silver-slate uppercase tracking-wider font-semibold">Admin Active</span>
+              </div>
+              <button
+                onClick={handleSignOut}
+                title="Sign Out"
+                className="text-silver-slate hover:text-red-400 transition-colors p-1"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
         </aside>
@@ -184,12 +298,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* ── Mobile Header ── */}
         <div className="md:hidden fixed top-0 left-0 right-0 z-50 glass-panel border-b border-white/5 px-4 py-3 flex items-center justify-between">
           <h1 className="font-display font-bold text-sm">Admin Panel</h1>
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 rounded-xl border border-white/10 text-silver-slate hover:text-ice-white transition-all"
-          >
-            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSignOut}
+              className="p-2 rounded-xl border border-white/10 text-silver-slate hover:text-red-400 transition-all"
+              title="Sign Out"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-2 rounded-xl border border-white/10 text-silver-slate hover:text-ice-white transition-all"
+            >
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+          </div>
         </div>
 
         {/* ── Mobile Nav Overlay ── */}

@@ -106,12 +106,19 @@ function CoastalPortalContent() {
   // Toast notification state
   const [toastMessage, setToastMessage] = useState<{ title: string; subtitle?: string; iconName?: string } | null>(null);
 
-  // Synchronize tab parameter if URL changes
+  // Synchronize tab parameter and check verification toast
   useEffect(() => {
     if (tabParam && ["tracker", "devotional", "journey", "leaderboard", "feed"].includes(tabParam)) {
       setActiveTab(tabParam as any);
     }
-  }, [tabParam]);
+    if (searchParams.get("verified") === "true") {
+      setToastMessage({
+        title: "Email Verified",
+        subtitle: "Welcome to Coastal Community Church (#3266). Your account is active!",
+        iconName: "CheckCircle2",
+      });
+    }
+  }, [tabParam, searchParams]);
 
   // Detect Supabase user on client mount
   useEffect(() => {

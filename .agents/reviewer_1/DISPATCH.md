@@ -1,20 +1,25 @@
-## 2026-08-17T17:02:22Z
-You are Reviewer 1 for the BodiedbyEsh.com Coastal Community Church (#3266) Faith & Fitness Walking and Step Tracker project.
+## 2026-09-02T16:47:52Z
 
-Working directory: C:\projects\BodiedbyEsh\.agents\reviewer_1
-Parent conversation ID: 8ee26115-64d8-4399-bfa9-d72abdf93fc3
-Project root: C:\projects\BodiedbyEsh
+<USER_REQUEST>
+You are teamwork_preview_reviewer (Backend & Ingress Reviewer).
+Working directory: c:\projects\BodiedbyEsh\.agents\reviewer_1
+Project root: c:\projects\BodiedbyEsh
+Original Request: c:\projects\BodiedbyEsh\ORIGINAL_REQUEST.md
+Master Project Plan: c:\projects\BodiedbyEsh\PROJECT.md
+Test Readiness: c:\projects\BodiedbyEsh\TEST_READY.md
 
-Your mission is to perform an objective, rigorous code and architecture review of the entire Coastal Community Church (#3266) system:
-1. Read C:\projects\BodiedbyEsh\.agents\ORIGINAL_REQUEST.md, PROJECT.md, and TEST_READY.md.
-2. Inspect:
-   - Database DDL, RLS policies, and RPC functions in `scratch/coastal_3266_setup.sql`.
-   - TypeScript contracts in `src/types/coastal.ts`.
-   - Data access service layer in `src/lib/coastal/db.ts`, `devotionals-data.ts`, `milestones-data.ts`.
-   - Backend API routes in `src/app/api/coastal/` (`steps`, `community`, `devotionals`, `join`).
-   - Frontend page routes in `src/app/coastal/page.tsx` and `src/app/coastal-walk/page.tsx`.
-3. Execute the automated test suite via `node scripts/run-coastal-tests.mjs`.
-4. Execute `npm run build` to verify production build and TypeScript compilation.
-5. Check for any build warnings, type errors, unhandled edge cases, or broken contracts.
-6. Issue an unambiguous verdict: APPROVE or REQUEST_CHANGES in your handoff report.
-7. Write your report to `C:\projects\BodiedbyEsh\.agents\reviewer_1\analysis.md` and `handoff.md`, and notify parent.
+Your Mission:
+1. Examine `scratch/client_intakes_setup.sql`, `src/lib/validation/schemas.ts`, and `src/app/api/intake/route.ts`.
+2. Verify:
+   - Rate limiting via `checkRateLimit(request, "form")` returning RFC 429.
+   - Zod runtime validation returning structured 400 Bad Request on invalid payloads.
+   - Supabase persistence logic with JSONB `intake_data`.
+   - Admin authentication via `requireAdminSession(request)` on `GET` and `PATCH`.
+   - Zero hardcoded secrets, PII redaction in logs.
+3. Run verification commands:
+   - `node scripts/run-intake-tests.mjs`
+   - `node scripts/run-prr-audit-suite.mjs`
+   - `npx.cmd tsc --noEmit`
+4. Write your review findings and final verdict (APPROVE or REQUEST_CHANGES) to `c:\projects\BodiedbyEsh\.agents\reviewer_1\handoff.md`.
+5. Send a message to your caller with your verdict.
+</USER_REQUEST>

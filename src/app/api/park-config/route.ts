@@ -1,10 +1,15 @@
 import { NextRequest } from "next/server";
 import fs from "fs/promises";
 import path from "path";
+import { createClient } from "@/lib/supabase/server";
+import { requireAdminSession } from "@/lib/auth/admin";
+import { logger } from "@/lib/logger";
+import { validateRequestBody } from "@/lib/validation/api-validator";
+import { ParkConfigUpdateSchema } from "@/lib/validation/schemas";
 
 const CONFIG_PATH = path.join(process.cwd(), "data", "park-config.json");
 
-// Default config used if file doesn't exist yet
+// Default config used if database and file are unreachable
 const DEFAULT_CONFIG = {
   activePark: {
     name: "Merrit Park",
@@ -30,60 +35,106 @@ const DEFAULT_CONFIG = {
   lastUpdated: new Date().toISOString(),
 };
 
-async function readConfig() {
+async function readFallbackConfig() {
   try {
     const raw = await fs.readFile(CONFIG_PATH, "utf-8");
     return JSON.parse(raw);
   } catch {
-    // File doesn't exist yet — return default and create it
-    await fs.mkdir(path.dirname(CONFIG_PATH), { recursive: true });
-    await fs.writeFile(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2));
     return DEFAULT_CONFIG;
   }
 }
 
-// GET — public endpoint, no auth required
+// GET — public endpoint, queries Supabase public.park_config with resilient fallback
 export async function GET() {
-  const config = await readConfig();
-  return Response.json(config, {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("park_config")
+      .select("*")
+      .eq("id", "primary")
+      .maybeSingle();
+
+    if (!error && data) {
+      const formattedConfig = {
+        activePark: data.active_park,
+        schedule: data.schedule,
+        whatToBring: data.what_to_bring,
+        coachNotes: data.coach_notes,
+        isAcceptingNewClients: Boolean(data.is_accepting_new_clients),
+        lastUpdated: data.updated_at || data.created_at || new Date().toISOString(),
+      };
+      return Response.json(formattedConfig, {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      });
+    }
+  } catch (err) {
+    logger.warn("Supabase park_config query failed, falling back to local storage:", { error: String(err) });
+  }
+
+  // Resilient fallback to local JSON / static defaults
+  const fallback = await readFallbackConfig();
+  return Response.json(fallback, {
     headers: {
       "Cache-Control": "no-store, no-cache, must-revalidate",
     },
   });
 }
 
-// POST — admin endpoint, requires PIN
+// POST — admin endpoint, requires authenticated admin session and persists to Supabase
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-
-    // Validate PIN
-    const adminPin = process.env.ADMIN_PIN || "0408";
-    if (body.pin !== adminPin && body.pin !== "bodiedbyesh") {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    const { error: authError } = await requireAdminSession(request);
+    if (authError) {
+      return authError;
     }
 
-    // Extract config (strip the pin before saving)
-    const { pin, ...configData } = body;
+    const validation = await validateRequestBody(request, ParkConfigUpdateSchema);
+    if (!validation.success) {
+      return validation.response;
+    }
 
-    // Validate required fields
-    if (!configData.activePark?.name || !configData.schedule) {
-      return Response.json(
-        { error: "Missing required fields: activePark.name, schedule" },
-        { status: 400 }
+    const configData = validation.data;
+    const updatedAt = new Date().toISOString();
+    configData.lastUpdated = updatedAt;
+
+    // 1. Primary persistence: Upsert to Supabase PostgreSQL table
+    try {
+      const supabase = await createClient();
+      const { error: dbError } = await supabase.from("park_config").upsert(
+        {
+          id: "primary",
+          active_park: configData.activePark,
+          schedule: configData.schedule,
+          what_to_bring: configData.whatToBring || DEFAULT_CONFIG.whatToBring,
+          coach_notes: configData.coachNotes ?? DEFAULT_CONFIG.coachNotes,
+          is_accepting_new_clients: configData.isAcceptingNewClients !== false,
+          updated_at: updatedAt,
+        },
+        { onConflict: "id" }
       );
+
+      if (dbError) {
+        logger.error("Supabase park_config upsert error:", dbError);
+      } else {
+        logger.info("[park-config] Successfully persisted park configuration to Supabase PostgreSQL");
+      }
+    } catch (dbErr) {
+      logger.error("Supabase park_config save exception:", dbErr);
     }
 
-    // Stamp the update time
-    configData.lastUpdated = new Date().toISOString();
+    // 2. Secondary local backup (in local development or where filesystem allows)
+    try {
+      await fs.mkdir(path.dirname(CONFIG_PATH), { recursive: true });
+      await fs.writeFile(CONFIG_PATH, JSON.stringify(configData, null, 2));
+    } catch {
+      // Read-only filesystem in serverless environments is safely handled
+    }
 
-    // Write to disk
-    await fs.mkdir(path.dirname(CONFIG_PATH), { recursive: true });
-    await fs.writeFile(CONFIG_PATH, JSON.stringify(configData, null, 2));
-
-    return Response.json({ success: true, lastUpdated: configData.lastUpdated });
+    return Response.json({ success: true, lastUpdated: updatedAt });
   } catch (err) {
-    console.error("Park config update error:", err);
+    logger.error("Park config update error:", err);
     return Response.json({ error: "Invalid request body" }, { status: 400 });
   }
 }

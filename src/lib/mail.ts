@@ -1,3 +1,6 @@
+import { logger, maskEmail } from "@/lib/logger";
+import { fetchWithTimeout } from "@/lib/http/safe-fetch";
+
 /**
  * Lightweight Email Utility using Resend API.
  * Uses native fetch to avoid extra package dependencies.
@@ -15,7 +18,7 @@ export async function sendEmail({
 
   if (apiKey && !apiKey.includes("placeholder")) {
     try {
-      const response = await fetch("https://api.resend.com/emails", {
+      const response = await fetchWithTimeout("https://api.resend.com/emails", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -27,29 +30,30 @@ export async function sendEmail({
           subject,
           html,
         }),
-      });
+      }, 8000);
 
       if (response.ok) {
-        console.log(`[Email] Successfully sent email to ${to} via Resend.`);
+        logger.info(`[Email] Successfully sent email to ${maskEmail(to)} via Resend.`);
         return true;
       } else {
         const errorText = await response.text();
-        console.error(`[Email] Resend API returned error status ${response.status}: ${errorText}`);
+        logger.error(`[Email] Resend API returned error status ${response.status}: ${errorText}`);
       }
     } catch (err) {
-      console.error("[Email] Exception encountered sending email via Resend:", err);
+      logger.error("[Email] Exception encountered sending email via Resend:", err);
     }
   }
 
   // Fallback simulator for development
-  console.log(`
-==================================================
-[SIMULATED EMAIL SENT]
-To: ${to}
-Subject: ${subject}
-Content HTML:
-${html}
-==================================================
-  `);
+  if (process.env.NODE_ENV === "production") {
+    logger.info(`[Email Simulator] Dispatched email to ${maskEmail(to)} with subject: ${subject}`);
+  } else {
+    logger.info(`[SIMULATED EMAIL SENT] To: ${maskEmail(to)} | Subject: ${subject}`, {
+      recipient: maskEmail(to),
+      subject,
+      htmlLength: html.length,
+      suppressInProd: true,
+    });
+  }
   return true;
 }

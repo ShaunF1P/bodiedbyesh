@@ -25,12 +25,12 @@ export async function getStripe() {
   if (!stripeInstance) {
     try {
       // Dynamic import so the build doesn't crash if `stripe` isn't installed
-      // @ts-ignore — stripe package may not be installed yet
       const { default: Stripe } = await import("stripe");
       stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY, {
-        // @ts-ignore — apiVersion may drift between stripe SDK versions
-        apiVersion: "2024-06-20",
+        apiVersion: "2024-06-20" as any,
         typescript: true,
+        timeout: 8000,
+        maxNetworkRetries: 2,
       });
     } catch {
       console.error(

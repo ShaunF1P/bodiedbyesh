@@ -20,6 +20,7 @@ import {
   Link2,
 } from "lucide-react";
 import { StepLog, UserStreak } from "@/types/coastal";
+import { getLocalISODate } from "@/lib/coastal/db";
 
 export interface HealthProviderConfig {
   id: "apple_health" | "google_health" | "google_fit" | "fitbit" | "garmin" | "strava";
@@ -39,9 +40,8 @@ const DEFAULT_PROVIDERS: HealthProviderConfig[] = [
     platform: "iOS / Apple Watch",
     category: "mobile",
     description: "Automatic background step syncing via iOS HealthKit and Apple Watch.",
-    isConnected: true,
-    lastSynced: "5 mins ago",
-    syncedStepsToday: 6840,
+    isConnected: false,
+    syncedStepsToday: 0,
   },
   {
     id: "google_health",
@@ -157,7 +157,7 @@ export default function HealthTrackerSyncModal({
           userId,
           groupId,
           steps: sampleSteps,
-          date: new Date().toISOString().split("T")[0],
+          date: getLocalISODate(),
           deviceModel: "Health Sensor Sync",
         }),
       });

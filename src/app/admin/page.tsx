@@ -76,20 +76,15 @@ function isThisWeek(iso: string) {
   return d >= weekAgo;
 }
 
-import { useAdminPin } from "./layout";
-
 export default function AdminDashboardPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const { pin } = useAdminPin();
 
   useEffect(() => {
-    if (!pin) return;
     async function fetchLeads() {
       try {
         const res = await fetch("/api/admin/leads", {
-          headers: { "x-admin-pin": pin },
           cache: "no-store",
         });
         const data = await res.json();
@@ -104,7 +99,7 @@ export default function AdminDashboardPage() {
       setLoading(false);
     }
     fetchLeads();
-  }, [pin]);
+  }, []);
 
   const totalLeads = leads.length;
   const newThisWeek = leads.filter((l) => isThisWeek(l.created_at)).length;

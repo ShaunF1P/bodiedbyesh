@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useRef, useEffect } from "react";
 import { ScanBarcode, Loader2, CheckCircle, Plus, X, AlertCircle } from "lucide-react";
+import { fetchWithTimeout } from "@/lib/http/safe-fetch";
 
 interface NutritionData {
   name: string;
@@ -96,8 +97,10 @@ export default function BarcodeScanner({ onFoodLogged }: BarcodeScannerProps) {
     setError("");
 
     try {
-      const res = await fetch(
-        `https://world.openfoodfacts.org/api/v2/product/${code}?fields=product_name,nutriments,brands,image_front_small_url,serving_size`
+      const res = await fetchWithTimeout(
+        `https://world.openfoodfacts.org/api/v2/product/${code}?fields=product_name,nutriments,brands,image_front_small_url,serving_size`,
+        undefined,
+        8000
       );
       const data = await res.json();
 
