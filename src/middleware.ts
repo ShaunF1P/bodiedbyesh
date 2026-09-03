@@ -54,6 +54,13 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const ADMIN_EMAILS = [
+    "bodiedbyesh@gmail.com",
+    "nieshaedwards314@gmail.com",
+    "niesha0314@gmail.com",
+    "kashaunmuhammad@gmail.com",
+  ];
+
   // ── 2. Intercept /admin, /admin/*, and /logo-review/admin ───────────────────
   if (pathname.startsWith("/admin") || pathname.startsWith("/logo-review/admin")) {
     if (!user) {
@@ -65,8 +72,9 @@ export async function middleware(request: NextRequest) {
     }
 
     const userRole = user.app_metadata?.role as string | undefined;
+    const isEmailAdmin = user.email && ADMIN_EMAILS.includes(user.email.toLowerCase());
 
-    if (userRole !== "admin") {
+    if (userRole !== "admin" && !isEmailAdmin) {
       // Unauthorized non-admin user -> redirect to /dashboard
       const url = request.nextUrl.clone();
       url.pathname = "/dashboard";
@@ -97,10 +105,15 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith("/login") && user && user.email_confirmed_at) {
     const redirectTo = request.nextUrl.searchParams.get("redirectTo");
     const userRole = user.app_metadata?.role as string | undefined;
+    const isEmailAdmin = user.email && ADMIN_EMAILS.includes(user.email.toLowerCase());
+    const isAdmin = userRole === "admin" || isEmailAdmin;
 
     const url = request.nextUrl.clone();
-    if (redirectTo && redirectTo.startsWith("/admin") && userRole === "admin") {
+    if (redirectTo && redirectTo.startsWith("/admin") && isAdmin) {
       url.pathname = redirectTo;
+      url.search = "";
+    } else if (isAdmin) {
+      url.pathname = "/admin";
       url.search = "";
     } else {
       url.pathname = "/dashboard";

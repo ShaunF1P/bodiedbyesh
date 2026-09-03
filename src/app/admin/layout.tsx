@@ -53,13 +53,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [authError, setAuthError] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const ADMIN_EMAILS = [
+    "bodiedbyesh@gmail.com",
+    "nieshaedwards314@gmail.com",
+    "niesha0314@gmail.com",
+    "kashaunmuhammad@gmail.com",
+  ];
+
   useEffect(() => {
     async function checkAdmin() {
       try {
         const { data: { user: currentUser }, error } = await supabase.auth.getUser();
         if (!error && currentUser) {
           setUser(currentUser);
-          setIsAdmin(currentUser.app_metadata?.role === "admin");
+          const isEmailAdmin = Boolean(currentUser.email && ADMIN_EMAILS.includes(currentUser.email.toLowerCase()));
+          setIsAdmin(currentUser.app_metadata?.role === "admin" || isEmailAdmin);
         }
       } catch (err) {
         console.error("Admin auth check error:", err);
@@ -90,7 +98,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       setUser(data.user);
       const role = data.user.app_metadata?.role;
-      if (role === "admin") {
+      const isEmailAdmin = data.user.email && ADMIN_EMAILS.includes(data.user.email.toLowerCase());
+      if (role === "admin" || isEmailAdmin) {
         setIsAdmin(true);
       } else {
         setIsAdmin(false);

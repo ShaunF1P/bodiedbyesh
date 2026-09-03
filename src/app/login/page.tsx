@@ -98,7 +98,24 @@ function LoginContent() {
           setErrorMsg("Please verify your email before entering the client portal.");
           await supabase.auth.signOut();
         } else {
-          router.push("/dashboard");
+          const redirectTo = searchParams.get("redirectTo");
+          const ADMIN_EMAILS = [
+            "bodiedbyesh@gmail.com",
+            "nieshaedwards314@gmail.com",
+            "niesha0314@gmail.com",
+            "kashaunmuhammad@gmail.com",
+          ];
+          const userRole = data.user?.app_metadata?.role;
+          const isEmailAdmin = data.user?.email && ADMIN_EMAILS.includes(data.user.email.toLowerCase());
+          const isAdmin = userRole === "admin" || isEmailAdmin;
+
+          if (redirectTo && (isAdmin || !redirectTo.startsWith("/admin"))) {
+            router.push(redirectTo);
+          } else if (isAdmin) {
+            router.push("/admin");
+          } else {
+            router.push("/dashboard");
+          }
         }
       }
     } catch (err: any) {

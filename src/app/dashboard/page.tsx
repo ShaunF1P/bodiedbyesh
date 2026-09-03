@@ -52,6 +52,7 @@ import {
   Award,
   ClipboardList,
   ArrowRight,
+  AlertTriangle,
 } from "lucide-react";
 
 // ── Tab definitions ──
@@ -117,6 +118,7 @@ export default function ClientDashboard() {
   const [selectedAdminClient, setSelectedAdminClient] = useState<RosterClient | null>(null);
   const [isHealthSyncModalOpen, setIsHealthSyncModalOpen] = useState(false);
   const [isWearableSynced, setIsWearableSynced] = useState<boolean>(false);
+  const [adminAccessDenied, setAdminAccessDenied] = useState(false);
 
   const loadClientDataForAdmin = async (clientInfo: RosterClient) => {
     setLoading(true);
@@ -215,11 +217,20 @@ export default function ClientDashboard() {
 
       setUser(currentUser);
 
-      const isStaffAdmin = currentUser.app_metadata?.role === "admin";
+      const ADMIN_EMAILS = [
+        "bodiedbyesh@gmail.com",
+        "nieshaedwards314@gmail.com",
+        "niesha0314@gmail.com",
+        "kashaunmuhammad@gmail.com",
+      ];
+      const isStaffAdmin = Boolean(currentUser.app_metadata?.role === "admin" || (currentUser.email && ADMIN_EMAILS.includes(currentUser.email.toLowerCase())));
       setIsAdminMode(isStaffAdmin);
 
       const searchParams = new URLSearchParams(window.location.search);
       const viewAsParam = searchParams.get("viewAs");
+      if (searchParams.get("error") === "unauthorized_admin_access") {
+        setAdminAccessDenied(true);
+      }
 
       if (isStaffAdmin) {
         try {
@@ -625,6 +636,27 @@ export default function ClientDashboard() {
 
       <Header />
 
+      {/* Admin Access Denied Alert */}
+      {adminAccessDenied && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 lg:px-12 pt-6">
+          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg shadow-amber-500/5">
+            <div className="flex items-center gap-2.5">
+              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+              <div>
+                <span className="font-bold block text-sm text-white">Administrator Access Restricted</span>
+                You were redirected here because your current login ({user?.email || "this account"}) does not have Coach Admin privileges.
+              </div>
+            </div>
+            <button
+              onClick={handleSignOut}
+              className="px-4 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 text-xs font-bold uppercase tracking-wider transition-all shrink-0 cursor-pointer"
+            >
+              Sign Out &amp; Switch Account
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Hero bar */}
       <div className="border-b border-white/5 bg-onyx-card/30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 lg:px-12 py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -677,13 +709,24 @@ export default function ClientDashboard() {
               })}
             </p>
           </div>
-          <button
-            onClick={handleSignOut}
-            className="flex items-center gap-1.5 px-4 py-2 border border-white/10 hover:border-red-500/30 rounded-xl text-xs font-semibold text-silver-slate hover:text-red-400 transition-all cursor-pointer shrink-0"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            Sign Out
-          </button>
+          <div className="flex items-center gap-2.5 shrink-0">
+            {isAdminMode && (
+              <Link
+                href="/admin"
+                className="flex items-center gap-1.5 px-4 py-2 bg-accent-lime hover:bg-accent-lime/90 text-cyber-slate font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-md shadow-accent-lime/20 cursor-pointer"
+              >
+                <Shield className="w-3.5 h-3.5" />
+                <span>Coach Admin Portal</span>
+              </Link>
+            )}
+            <button
+              onClick={handleSignOut}
+              className="flex items-center gap-1.5 px-4 py-2 border border-white/10 hover:border-red-500/30 rounded-xl text-xs font-semibold text-silver-slate hover:text-red-400 transition-all cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Sign Out
+            </button>
+          </div>
         </div>
       </div>
 

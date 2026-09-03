@@ -28,8 +28,16 @@ export async function requireAdminSession(request?: NextRequest): Promise<AdminA
       };
     }
 
+    const ADMIN_EMAILS = [
+      "bodiedbyesh@gmail.com",
+      "nieshaedwards314@gmail.com",
+      "niesha0314@gmail.com",
+      "kashaunmuhammad@gmail.com",
+    ];
     const role = user.app_metadata?.role;
-    if (role !== "admin") {
+    const isEmailAdmin = user.email && ADMIN_EMAILS.includes(user.email.toLowerCase());
+
+    if (role !== "admin" && !isEmailAdmin) {
       return {
         user: null,
         error: Response.json(
