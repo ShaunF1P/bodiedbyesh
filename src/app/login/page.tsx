@@ -13,6 +13,8 @@ function LoginContent() {
   const supabase = createClient();
 
   const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [adminLoginType, setAdminLoginType] = useState<"code" | "email">("code");
+  const [adminCode, setAdminCode] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -26,6 +28,45 @@ function LoginContent() {
       setErrorMsg("Please verify your email before entering the client portal.");
     }
   }, [searchParams]);
+
+  const handleAdminCodeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = adminCode.trim();
+    if (!trimmed) return;
+
+    setLoading(true);
+    setErrorMsg("");
+    setInfoMsg("");
+
+    try {
+      const res = await fetch("/api/admin/verify-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: trimmed }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setErrorMsg(data.error || "Invalid code. Please enter 0498.");
+        setLoading(false);
+        return;
+      }
+
+      await supabase.auth.signInWithPassword({
+        email: "bodiedbyesh@gmail.com",
+        password: "Thor101122",
+      }).catch(() => {});
+
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("admin_pin", trimmed);
+      }
+
+      router.push("/admin");
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to verify admin code.");
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -164,9 +205,37 @@ function LoginContent() {
 
           {/* Mode Switcher */}
           {searchParams.get("redirectTo")?.startsWith("/admin") ? (
-            <div className="mb-6 p-3 rounded-xl bg-accent-lime/10 border border-accent-lime/20 text-accent-lime text-xs flex items-center gap-2">
-              <Shield className="w-4 h-4 shrink-0" />
-              <span>Sign in with your verified administrator credentials.</span>
+            <div className="space-y-4 mb-6">
+              <div className="flex p-1 bg-white/5 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdminLoginType("code");
+                    setErrorMsg("");
+                  }}
+                  className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                    adminLoginType === "code"
+                      ? "bg-accent-lime text-cyber-slate"
+                      : "text-silver-slate hover:text-ice-white"
+                  }`}
+                >
+                  Admin Code (0408)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdminLoginType("email");
+                    setErrorMsg("");
+                  }}
+                  className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                    adminLoginType === "email"
+                      ? "bg-accent-lime text-cyber-slate"
+                      : "text-silver-slate hover:text-ice-white"
+                  }`}
+                >
+                  Email Login
+                </button>
+              </div>
             </div>
           ) : (
             <div className="flex p-1 bg-white/5 rounded-xl mb-6">
@@ -213,7 +282,48 @@ function LoginContent() {
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          {searchParams.get("redirectTo")?.startsWith("/admin") && adminLoginType === "code" ? (
+            <form onSubmit={handleAdminCodeSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[10px] uppercase tracking-wider text-silver-slate font-semibold mb-1.5 text-center">
+                  Enter 4-Digit Admin Code
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-silver-slate" />
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    autoFocus
+                    required
+                    maxLength={10}
+                    value={adminCode}
+                    onChange={(e) => {
+                      setAdminCode(e.target.value);
+                      setErrorMsg("");
+                    }}
+                    placeholder="Enter code (0408)"
+                    className="w-full bg-white/5 border border-white/10 focus:border-accent-lime/50 rounded-xl pl-11 pr-4 py-3.5 text-center text-xl font-mono tracking-widest text-ice-white placeholder:text-silver-slate/30 focus:outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-accent-lime hover:bg-accent-lime/90 text-cyber-slate font-display font-bold py-3.5 px-6 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer mt-6 shadow-lg shadow-accent-lime/10"
+              >
+                {loading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <span>Unlock Admin Portal</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
             {mode === "signup" && (
               <div>
                 <label className="block text-[10px] uppercase tracking-wider text-silver-slate font-semibold mb-1.5">Full Name</label>
@@ -277,6 +387,7 @@ function LoginContent() {
               )}
             </button>
           </form>
+          )}
         </div>
 
         <div className="text-center mt-6">

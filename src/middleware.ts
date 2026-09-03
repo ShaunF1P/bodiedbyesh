@@ -61,9 +61,12 @@ export async function middleware(request: NextRequest) {
     "kashaunmuhammad@gmail.com",
   ];
 
+  const adminPinCookie = request.cookies.get("admin_pin_session")?.value;
+  const hasValidPinSession = adminPinCookie === "0498" || adminPinCookie === "0408";
+
   // ── 2. Intercept /admin, /admin/*, and /logo-review/admin ───────────────────
   if (pathname.startsWith("/admin") || pathname.startsWith("/logo-review/admin")) {
-    if (!user) {
+    if (!user && !hasValidPinSession) {
       // Unauthenticated -> redirect to /login with redirectTo parameter
       const url = request.nextUrl.clone();
       url.pathname = "/login";
@@ -71,10 +74,10 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    const userRole = user.app_metadata?.role as string | undefined;
-    const isEmailAdmin = user.email && ADMIN_EMAILS.includes(user.email.toLowerCase());
+    const userRole = user?.app_metadata?.role as string | undefined;
+    const isEmailAdmin = user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase());
 
-    if (userRole !== "admin" && !isEmailAdmin) {
+    if (!hasValidPinSession && userRole !== "admin" && !isEmailAdmin) {
       // Unauthorized non-admin user -> redirect to /dashboard
       const url = request.nextUrl.clone();
       url.pathname = "/dashboard";

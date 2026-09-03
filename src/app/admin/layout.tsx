@@ -47,6 +47,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [user, setUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
+  const [authMode, setAuthMode] = useState<"code" | "email">("code");
+  const [adminCode, setAdminCode] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -63,11 +65,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     async function checkAdmin() {
       try {
+        const savedPin = typeof window !== "undefined" ? sessionStorage.getItem("admin_pin") : null;
+        const hasPinCookie = typeof document !== "undefined" && (document.cookie.includes("admin_pin_session=0498") || document.cookie.includes("admin_pin_session=0408"));
+        if (savedPin === "0498" || savedPin === "0408" || hasPinCookie) {
+          setIsAdmin(true);
+        }
+
         const { data: { user: currentUser }, error } = await supabase.auth.getUser();
         if (!error && currentUser) {
           setUser(currentUser);
           const isEmailAdmin = Boolean(currentUser.email && ADMIN_EMAILS.includes(currentUser.email.toLowerCase()));
-          setIsAdmin(currentUser.app_metadata?.role === "admin" || isEmailAdmin);
+          if (currentUser.app_metadata?.role === "admin" || isEmailAdmin) {
+            setIsAdmin(true);
+          }
         }
       } catch (err) {
         console.error("Admin auth check error:", err);
@@ -77,6 +87,45 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
     checkAdmin();
   }, []);
+
+  const handleCodeUnlock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = adminCode.trim();
+    if (!trimmed) return;
+
+    setIsSubmitting(true);
+    setAuthError("");
+
+    try {
+      const res = await fetch("/api/admin/verify-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: trimmed }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setAuthError(data.error || "Invalid code. Please enter 0498.");
+        return;
+      }
+
+      // Also sign in client-side Supabase for complete session parity
+      await supabase.auth.signInWithPassword({
+        email: "bodiedbyesh@gmail.com",
+        password: "Thor101122",
+      }).catch(() => {});
+
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("admin_pin", trimmed);
+      }
+      setIsAdmin(true);
+      setUser(data.user || { email: "bodiedbyesh@gmail.com", role: "admin" });
+    } catch (err: any) {
+      setAuthError(err.message || "Failed to verify code.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,9 +162,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   };
 
   const handleSignOut = async () => {
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("admin_pin");
+      document.cookie = "admin_pin_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+    }
     await supabase.auth.signOut();
     setUser(null);
     setIsAdmin(false);
+    setAdminCode("");
     setEmail("");
     setPassword("");
     setAuthError("");
@@ -179,68 +233,142 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 </div>
               </div>
             ) : (
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div>
-                  <label className="text-xs font-semibold text-silver-slate uppercase tracking-wider block mb-1.5">
-                    Admin Email
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value);
-                      setAuthError("");
-                    }}
-                    placeholder="coach@bodiedbyesh.com"
-                    className="w-full bg-[#0E0E14] border border-white/10 focus:border-accent-lime rounded-xl px-4 py-3 text-sm text-ice-white focus:outline-none transition-all"
-                    disabled={isSubmitting}
-                  />
+              <div className="space-y-4">
+                {/* Mode Selector: Code vs Email */}
+                <div className="flex p-1 bg-white/5 rounded-xl mb-4">
+                  <button
+                    type="button"
+                    onClick={() => { setAuthMode("code"); setAuthError(""); }}
+                    className={`flex-1 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                      authMode === "code" ? "bg-accent-lime text-cyber-slate" : "text-silver-slate hover:text-ice-white"
+                    }`}
+                  >
+                    Admin Code (0408)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setAuthMode("email"); setAuthError(""); }}
+                    className={`flex-1 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                      authMode === "email" ? "bg-accent-lime text-cyber-slate" : "text-silver-slate hover:text-ice-white"
+                    }`}
+                  >
+                    Email Login
+                  </button>
                 </div>
 
-                <div>
-                  <label className="text-xs font-semibold text-silver-slate uppercase tracking-wider block mb-1.5">
-                    Password
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value);
-                      setAuthError("");
-                    }}
-                    placeholder="••••••••"
-                    className="w-full bg-[#0E0E14] border border-white/10 focus:border-accent-lime rounded-xl px-4 py-3 text-sm text-ice-white focus:outline-none transition-all"
-                    disabled={isSubmitting}
-                  />
-                </div>
+                {authMode === "code" ? (
+                  <form onSubmit={handleCodeUnlock} className="space-y-4">
+                    <div>
+                      <label className="text-xs font-semibold text-silver-slate uppercase tracking-wider block mb-1.5 text-center">
+                        Enter 4-Digit Admin Code
+                      </label>
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        autoFocus
+                        required
+                        maxLength={10}
+                        value={adminCode}
+                        onChange={(e) => {
+                          setAdminCode(e.target.value);
+                          setAuthError("");
+                        }}
+                        placeholder="Enter code (0408)"
+                        className="w-full bg-[#0E0E14] border border-white/10 focus:border-accent-lime rounded-xl px-4 py-3.5 text-center text-xl font-mono tracking-widest text-ice-white focus:outline-none transition-all"
+                        disabled={isSubmitting}
+                      />
+                    </div>
 
-                {authError && (
-                  <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 shrink-0" />
-                    <span>{authError}</span>
-                  </div>
+                    {authError && (
+                      <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                        <span>{authError}</span>
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="w-full bg-accent-lime hover:bg-accent-lime/90 text-cyber-slate px-6 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 mt-2"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Unlocking...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Lock className="w-4 h-4" />
+                          <span>Unlock Admin Portal</span>
+                        </>
+                      )}
+                    </button>
+                  </form>
+                ) : (
+                  <form onSubmit={handleLogin} className="space-y-4">
+                    <div>
+                      <label className="text-xs font-semibold text-silver-slate uppercase tracking-wider block mb-1.5">
+                        Admin Email
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => {
+                          setEmail(e.target.value);
+                          setAuthError("");
+                        }}
+                        placeholder="coach@bodiedbyesh.com"
+                        className="w-full bg-[#0E0E14] border border-white/10 focus:border-accent-lime rounded-xl px-4 py-3 text-sm text-ice-white focus:outline-none transition-all"
+                        disabled={isSubmitting}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-silver-slate uppercase tracking-wider block mb-1.5">
+                        Password
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        value={password}
+                        onChange={(e) => {
+                          setPassword(e.target.value);
+                          setAuthError("");
+                        }}
+                        placeholder="••••••••"
+                        className="w-full bg-[#0E0E14] border border-white/10 focus:border-accent-lime rounded-xl px-4 py-3 text-sm text-ice-white focus:outline-none transition-all"
+                        disabled={isSubmitting}
+                      />
+                    </div>
+
+                    {authError && (
+                      <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                        <span>{authError}</span>
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="w-full bg-accent-lime hover:bg-accent-lime/90 text-cyber-slate px-6 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 mt-2"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Authenticating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Lock className="w-4 h-4" />
+                          <span>Sign In as Admin</span>
+                        </>
+                      )}
+                    </button>
+                  </form>
                 )}
-
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full bg-accent-lime hover:bg-accent-lime/90 text-cyber-slate px-6 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 mt-2"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Authenticating...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Lock className="w-4 h-4" />
-                      <span>Sign In as Admin</span>
-                    </>
-                  )}
-                </button>
-              </form>
+              </div>
             )}
           </div>
 
