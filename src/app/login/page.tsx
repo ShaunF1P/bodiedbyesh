@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { getAuthRedirectUrl } from "@/lib/auth-url";
-import { Lock, Mail, User, ShieldCheck, Loader2, AlertTriangle } from "lucide-react";
+import { ShieldCheck, Shield, Mail, Lock, User, ArrowRight, Loader2, AlertTriangle } from "lucide-react";
 import Logo from "@/components/Logo";
 
 function LoginContent() {
@@ -142,41 +142,60 @@ function LoginContent() {
         <div className="glass-panel rounded-3xl p-8 border border-white/5 bg-[#080A0E]/80 backdrop-blur-md relative">
           <div className="flex items-center gap-3 mb-6 pb-4 border-b border-white/5">
             <div className="w-10 h-10 rounded-xl bg-accent-lime/10 flex items-center justify-center text-accent-lime">
-              <ShieldCheck className="w-5 h-5" />
+              {searchParams.get("redirectTo")?.startsWith("/admin") ? (
+                <Shield className="w-5 h-5" />
+              ) : (
+                <ShieldCheck className="w-5 h-5" />
+              )}
             </div>
             <div>
-              <h2 className="font-display font-bold text-lg text-ice-white">Client Portal</h2>
-              <p className="text-[10px] text-silver-slate uppercase tracking-wider">High-Performance Training Hub</p>
+              <h2 className="font-display font-bold text-lg text-ice-white">
+                {searchParams.get("redirectTo")?.startsWith("/admin")
+                  ? "Coach Admin Portal"
+                  : "Client Portal"}
+              </h2>
+              <p className="text-[10px] text-silver-slate uppercase tracking-wider">
+                {searchParams.get("redirectTo")?.startsWith("/admin")
+                  ? "Administrator Access & Management"
+                  : "High-Performance Training Hub"}
+              </p>
             </div>
           </div>
 
           {/* Mode Switcher */}
-          <div className="flex p-1 bg-white/5 rounded-xl mb-6">
-            <button
-              onClick={() => {
-                setMode("signin");
-                setErrorMsg("");
-                setInfoMsg("");
-              }}
-              className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${
-                mode === "signin" ? "bg-accent-lime text-cyber-slate" : "text-silver-slate hover:text-ice-white"
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              onClick={() => {
-                setMode("signup");
-                setErrorMsg("");
-                setInfoMsg("");
-              }}
-              className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${
-                mode === "signup" ? "bg-accent-lime text-cyber-slate" : "text-silver-slate hover:text-ice-white"
-              }`}
-            >
-              Register
-            </button>
-          </div>
+          {searchParams.get("redirectTo")?.startsWith("/admin") ? (
+            <div className="mb-6 p-3 rounded-xl bg-accent-lime/10 border border-accent-lime/20 text-accent-lime text-xs flex items-center gap-2">
+              <Shield className="w-4 h-4 shrink-0" />
+              <span>Sign in with your verified administrator credentials.</span>
+            </div>
+          ) : (
+            <div className="flex p-1 bg-white/5 rounded-xl mb-6">
+              <button
+                onClick={() => {
+                  setMode("signin");
+                  setErrorMsg("");
+                  setInfoMsg("");
+                }}
+                className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${
+                  mode === "signin" ? "bg-accent-lime text-cyber-slate" : "text-silver-slate hover:text-ice-white"
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                onClick={() => {
+                  setMode("signup");
+                  setErrorMsg("");
+                  setInfoMsg("");
+                }}
+                className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${
+                  mode === "signup" ? "bg-accent-lime text-cyber-slate" : "text-silver-slate hover:text-ice-white"
+                }`}
+              >
+                Register
+              </button>
+            </div>
+          )}
 
           {/* Messages */}
           {errorMsg && (
@@ -249,6 +268,8 @@ function LoginContent() {
             >
               {loading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
+              ) : searchParams.get("redirectTo")?.startsWith("/admin") ? (
+                "Sign In to Admin Portal"
               ) : mode === "signin" ? (
                 "Access Dashboard"
               ) : (
